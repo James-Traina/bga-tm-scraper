@@ -131,14 +131,97 @@ The scraper includes respectful rate limiting:
 - Check that the replay isn't private or restricted
 - Look at the raw HTML file to debug parsing issues
 
+## Game Log Parsing
+
+The scraper includes a comprehensive parser for extracting structured data from Terraforming Mars game logs.
+
+### Parse Scraped Games
+
+After scraping, parse the raw HTML into structured data:
+
+```bash
+python parse_game.py
+```
+
+This will:
+1. Parse all HTML files in `data/raw/`
+2. Extract detailed move-by-move data
+3. Generate JSON and CSV exports
+4. Create analysis summaries
+
+### Parser Features
+
+- **Move-by-move tracking**: Every action, card play, and resource change
+- **Terraforming parameters**: Temperature, oxygen, and ocean progression
+- **Card analysis**: All cards played with costs and effects
+- **Tile placement**: Cities, forests, and oceans with locations
+- **Resource tracking**: M€, steel, titanium, plants, energy, heat, TR
+- **Production changes**: All production modifications
+- **Game state**: Final terraforming status and generation count
+
+### Output Files
+
+The parser generates:
+
+1. **Individual game JSON**: Complete structured game data
+   ```
+   data/parsed/game_250604-1037.json
+   ```
+
+2. **Move CSV**: Tabular data for analysis
+   ```
+   data/parsed/moves_250604-1037.csv
+   ```
+
+3. **Summary JSON**: Aggregate statistics across all games
+   ```
+   data/parsed/parsing_summary.json
+   ```
+
+### Analysis
+
+Run analysis on parsed data:
+
+```bash
+python parse_game.py analyze
+```
+
+This provides:
+- Corporation usage statistics
+- Game completion rates
+- Strategy pattern identification
+- Average game metrics
+
+### Example Parsed Data
+
+```json
+{
+  "move_number": 45,
+  "timestamp": "10:32:40",
+  "player": "StrandedKnight",
+  "action_type": "play_card",
+  "card_play": {
+    "card_name": "Nuclear Power",
+    "cost_resources": [{"resource_type": "M€", "amount": -8}],
+    "immediate_effects": [{"resource_type": "Energy", "amount": 3, "production": true}]
+  },
+  "parameter_changes": {"temperature": -26},
+  "resource_changes": [
+    {"resource_type": "M€", "amount": -8},
+    {"resource_type": "Energy", "amount": 3, "production": true}
+  ]
+}
+```
+
 ## Future Development
 
 Planned features:
-- [ ] Game log parser to extract structured move data
 - [ ] URL discovery from Arena leaderboards
 - [ ] Season 21 filtering for consistent game settings
 - [ ] Statistical analysis of card win rates
 - [ ] Integration with existing Steam data format
+- [ ] Advanced strategy pattern recognition
+- [ ] Win condition analysis
 
 ## License
 
