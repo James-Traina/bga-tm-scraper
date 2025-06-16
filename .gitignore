@@ -38,7 +38,7 @@ venv.bak/
 # Logs
 *.log
 logs/
-scraper_*.log
+scraper.log
 
 # Data directories (contain scraped data)
 data/raw/

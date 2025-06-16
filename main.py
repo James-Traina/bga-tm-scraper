@@ -1,5 +1,5 @@
 """
-Main entry point for BGA Terraforming Mars scraper using regular Selenium
+Main entry point for BGA Terraforming Mars scraper
 """
 import logging
 import json
@@ -11,7 +11,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('scraper_selenium.log'),
+        logging.FileHandler('scraper.log'),
         logging.StreamHandler()
     ]
 )
@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Main function to run the Selenium scraper"""
+    """Main function to run the scraper"""
     
     # Try to import config
     try:
@@ -42,10 +42,10 @@ def main():
         return
     
     # Import scraper modules
-    from src.selenium_scraper import SeleniumTMScraper
+    from src.scraper import TMScraper
     
     # Initialize scraper
-    scraper = SeleniumTMScraper(
+    scraper = TMScraper(
         chromedriver_path=CHROMEDRIVER_PATH,
         request_delay=REQUEST_DELAY,
         headless=False  # Keep browser visible for manual login
@@ -72,14 +72,14 @@ def main():
         
         # Save results summary
         if results:
-            summary_file = f"data/processed/selenium_scraping_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            summary_file = f"data/processed/scraping_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(summary_file, 'w', encoding='utf-8') as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
             
             logger.info(f"Scraping completed! Summary saved to {summary_file}")
             
             # Print summary
-            print(f"\n=== Selenium Scraping Summary ===")
+            print(f"\n=== Scraping Summary ===")
             print(f"Total URLs processed: {len(TEST_URLS)}")
             print(f"Successfully scraped: {len(results)}")
             print(f"Raw HTML files saved to: {RAW_DATA_DIR}")

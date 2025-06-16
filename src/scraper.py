@@ -1,6 +1,5 @@
 """
-Selenium-based scraper for Terraforming Mars replay data from BoardGameArena
-Uses regular Selenium WebDriver without debug mode
+Web scraper for Terraforming Mars replay data from BoardGameArena
 """
 import time
 import os
@@ -17,12 +16,12 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-class SeleniumTMScraper:
-    """Scraper using regular Selenium WebDriver for Terraforming Mars replays"""
+class TMScraper:
+    """Web scraper for Terraforming Mars replays from BoardGameArena"""
     
     def __init__(self, chromedriver_path: str, request_delay: int = 2, headless: bool = False):
         """
-        Initialize the Selenium scraper
+        Initialize the scraper
         
         Args:
             chromedriver_path: Path to ChromeDriver executable

@@ -4,11 +4,11 @@ A web scraper for collecting Terraforming Mars game replay data from BoardGameAr
 
 ## Overview
 
-This scraper extracts detailed game logs from BGA Terraforming Mars replays for analysis. It uses Selenium WebDriver with manual login to handle BGA's authentication requirements.
+This scraper extracts detailed game logs from BGA Terraforming Mars replays for analysis. It uses web automation with manual login to handle BGA's authentication requirements.
 
 ## Features
 
-- **Selenium-based scraping**: Uses regular Selenium WebDriver for reliable data extraction
+- **Web automation**: Uses browser automation for reliable data extraction
 - **Manual authentication**: Handles BGA login through browser interaction
 - **Raw data preservation**: Saves complete HTML for iterative parser development
 - **Batch processing**: Scrapes multiple replays with configurable delays
@@ -41,7 +41,7 @@ Edit `config.py` and update:
 ### 4. Run the Scraper
 
 ```bash
-python main_selenium.py
+python main.py
 ```
 
 The scraper will:
@@ -56,12 +56,12 @@ The scraper will:
 ```
 bga-tm-scraper/
 ├── src/
-│   ├── selenium_scraper.py    # Main scraper class (WORKING)
+│   ├── scraper.py             # Main scraper class
 │   └── __init__.py
 ├── data/
 │   ├── raw/                   # Raw HTML files
 │   └── processed/             # Processed JSON summaries
-├── main_selenium.py           # Entry point (WORKING)
+├── main.py                    # Entry point
 ├── config.py                  # Configuration (update this)
 ├── config.example.py          # Configuration template
 ├── requirements.txt           # Python dependencies
@@ -118,7 +118,8 @@ The scraper includes respectful rate limiting:
 ### ChromeDriver Issues
 - Make sure ChromeDriver version matches your Chrome browser
 - Update `CHROMEDRIVER_PATH` in config.py
-- Run `python fix_chromedriver.py` to check versions
+- Check Chrome version: Help > About Google Chrome
+- Download matching ChromeDriver from https://chromedriver.chromium.org/
 
 ### Authentication Issues
 - Make sure you're fully logged into BGA before pressing Enter
