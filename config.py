@@ -3,7 +3,7 @@
 
 # Test URLs for initial development
 TEST_URLS = [
-    "https://boardgamearena.com/archive/replay/250604-1037/?table=688300395&player=86296239&comments=86296239"
+    "https://boardgamearena.com/archive/replay/250604-1037/?table=688769496&player=86296239&comments=86296239;"
 ]
 
 # Authentication - Extract these from your browser's developer tools

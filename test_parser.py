@@ -10,6 +10,9 @@ from src.parser import Parser
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
+TEST_REPLAY = "688769496"
+
 def test_parser():
     """Test the parser with the existing game data"""
     
@@ -17,7 +20,7 @@ def test_parser():
     parser = Parser()
     
     # Load the HTML file
-    html_file = "data/raw/replay_250604-1037.html"
+    html_file = f"data/raw/replay_{TEST_REPLAY}.html"
     
     if not os.path.exists(html_file):
         print(f"❌ HTML file not found: {html_file}")
@@ -35,7 +38,7 @@ def test_parser():
     print(f"🔄 Parsing game with parser...")
     
     try:
-        game_data = parser.parse_complete_game(html_content, "250604-1037")
+        game_data = parser.parse_complete_game(html_content, TEST_REPLAY)
         
         print(f"✅ Parsing successful!")
         print(f"   Replay ID: {game_data.replay_id}")
@@ -80,7 +83,7 @@ def test_parser():
                 print(f"     Production: {move.production_changes}")
         
         # Export to JSON
-        output_file = "data/parsed/game_250604-1037.json"
+        output_file = f"data/parsed/game_{TEST_REPLAY}.json"
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         
         print(f"\n💾 Exporting to: {output_file}")
@@ -116,7 +119,7 @@ def test_parser():
 def analyze_unified_data():
     """Analyze the game data"""
     
-    output_file = "data/parsed/game_250604-1037.json"
+    output_file = f"data/parsed/game_{TEST_REPLAY}.json"
     
     if not os.path.exists(output_file):
         print(f"❌ Data file not found: {output_file}")

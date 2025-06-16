@@ -228,17 +228,17 @@ class TMScraper:
                 pass
     
     def _extract_replay_id(self, url: str) -> Optional[str]:
-        """Extract replay ID from BGA replay URL"""
+        """Extract replay ID from BGA replay URL (table parameter)"""
         try:
-            from urllib.parse import urlparse
+            from urllib.parse import urlparse, parse_qs
             parsed = urlparse(url)
-            path_parts = parsed.path.split('/')
             
-            # URL format: /archive/replay/REPLAY_ID/
-            if 'replay' in path_parts:
-                replay_idx = path_parts.index('replay')
-                if replay_idx + 1 < len(path_parts):
-                    return path_parts[replay_idx + 1]
+            # Extract the table parameter from query string
+            query_params = parse_qs(parsed.query)
+            if 'table' in query_params:
+                table_values = query_params['table']
+                if table_values:
+                    return table_values[0]  # Return the first table value
             
             return None
         except Exception as e:
