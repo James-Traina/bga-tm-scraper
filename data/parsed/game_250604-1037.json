@@ -5768,11 +5768,113 @@
     "temperature": -4,
     "oxygen": 14,
     "oceans": 6,
-    "player_resources": {}
+    "player_resources": {},
+    "milestones": {
+      "Terraformer": {
+        "name": "Terraformer",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Mayor": {
+        "name": "Mayor",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Gardener": {
+        "name": "Gardener",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Builder": {
+        "name": "Builder",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Planner": {
+        "name": "Planner",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      }
+    },
+    "awards": {
+      "Landlord": {
+        "name": "Landlord",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Banker": {
+        "name": "Banker",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Scientist": {
+        "name": "Scientist",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Thermalist": {
+        "name": "Thermalist",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      },
+      "Miner": {
+        "name": "Miner",
+        "claimed_by": null,
+        "funded_by": null,
+        "vp_value": 5,
+        "standings": {}
+      }
+    },
+    "player_vp": {
+      "petersenhauke": {
+        "tr_rating": 33,
+        "milestones": {},
+        "awards": {},
+        "cards": {
+          "cards_total": 6
+        },
+        "board_tiles": 4,
+        "total": 43
+      },
+      "StrandedKnight": {
+        "tr_rating": 51,
+        "milestones": {
+          "milestones_total": 15
+        },
+        "awards": {
+          "awards_total": 5
+        },
+        "cards": {
+          "cards_total": 6
+        },
+        "board_tiles": 27,
+        "total": 104
+      }
+    }
   },
   "metadata": {
-    "parsed_at": "2025-06-16T20:23:10.377237",
+    "parsed_at": "2025-06-16T21:05:42.340191",
     "total_moves": 288,
-    "html_length": 3886879
+    "html_length": 3886879,
+    "milestones_found": 5,
+    "awards_found": 5
   }
 }
