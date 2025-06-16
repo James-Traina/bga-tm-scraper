@@ -193,7 +193,7 @@ The parser tracks these resources:
 import json
 
 # Load parsed data
-with open('data/parsed/unified_game_250604-1037.json', 'r') as f:
+with open('data/parsed/game_250604-1037.json', 'r') as f:
     game = json.load(f)
 
 # Analyze card plays
