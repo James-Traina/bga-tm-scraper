@@ -3,11 +3,13 @@
 
 # Test table IDs for initial development
 TEST_TABLE_IDS = [
-    "688771617"  # Extracted from original replay URL
+    "672224577"  # Extracted from original replay URL
 ]
 
 # URL templates for constructing BGA URLs
 TABLE_URL_TEMPLATE = "https://boardgamearena.com/table?table={table_id}"
+# NOTE: REPLAY_URL_TEMPLATE is now used as fallback only. The scraper dynamically extracts 
+# the correct version number from the gamereview page for each game.
 REPLAY_URL_TEMPLATE = "https://boardgamearena.com/archive/replay/250604-1037/?table={table_id}&player={player_id}&comments={player_id}"
 
 # Legacy URLs (for migration reference)

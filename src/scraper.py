@@ -334,9 +334,75 @@ class TMScraper:
             logger.error(f"Error extracting player IDs: {e}")
             return []
     
+    def extract_version_from_gamereview(self, table_id: str) -> Optional[str]:
+        """
+        Extract the version number from the gamereview page
+        
+        Args:
+            table_id: BGA table ID
+            
+        Returns:
+            str: Version number (e.g., "250604-1037") or None if not found
+        """
+        if not self.driver:
+            raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        gamereview_url = f"https://boardgamearena.com/gamereview?table={table_id}"
+        logger.info(f"Extracting version from gamereview page: {gamereview_url}")
+        
+        try:
+            # Navigate to the gamereview page
+            print(f"Navigating to gamereview page: {gamereview_url}")
+            self.driver.get(gamereview_url)
+            time.sleep(3)  # Wait for page to load
+            
+            # Check if we got an error page
+            page_source = self.driver.page_source
+            if 'must be logged' in page_source.lower():
+                print("❌ Authentication error - please make sure you're logged into BGA")
+                return None
+            
+            if 'fatal error' in page_source.lower():
+                print("❌ Fatal error on page - gamereview might not be accessible")
+                return None
+            
+            # Parse the HTML to find replay links
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            # Look for links containing /archive/replay/
+            replay_links = soup.find_all('a', href=True)
+            
+            for link in replay_links:
+                href = link.get('href', '')
+                if '/archive/replay/' in href:
+                    # Extract version number using regex
+                    version_match = re.search(r'/archive/replay/(\d+-\d+)/', href)
+                    if version_match:
+                        version = version_match.group(1)
+                        logger.info(f"Found version number: {version}")
+                        print(f"✅ Found version number: {version}")
+                        return version
+            
+            # If no version found in links, try a broader search in the page source
+            version_matches = re.findall(r'/archive/replay/(\d+-\d+)/', page_source)
+            if version_matches:
+                version = version_matches[0]  # Take the first match
+                logger.info(f"Found version number in page source: {version}")
+                print(f"✅ Found version number in page source: {version}")
+                return version
+            
+            logger.warning(f"No version number found in gamereview page for table {table_id}")
+            print("⚠️  No version number found in gamereview page")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error extracting version from gamereview for {table_id}: {e}")
+            print(f"❌ Error extracting version: {e}")
+            return None
+
     def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
-        Scrape replay page using table ID and player ID
+        Scrape replay page using table ID and player ID with dynamic version extraction
         
         Args:
             table_id: BGA table ID
@@ -347,9 +413,19 @@ class TMScraper:
         Returns:
             dict: Replay data or None if failed
         """
-        from config import REPLAY_URL_TEMPLATE
+        # First, extract the version number from the gamereview page
+        version = self.extract_version_from_gamereview(table_id)
         
-        replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
+        if not version:
+            # Fallback to the hardcoded version from config
+            logger.warning(f"Could not extract version for table {table_id}, using fallback from config")
+            print("⚠️  Using fallback version from config")
+            from config import REPLAY_URL_TEMPLATE
+            replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
+        else:
+            # Construct replay URL with the extracted version
+            replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={table_id}&player={player_id}&comments={player_id}"
+        
         logger.info(f"Scraping replay page: {replay_url}")
         
         # Use existing scrape_replay method with constructed URL
