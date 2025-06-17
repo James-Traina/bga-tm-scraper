@@ -28,17 +28,11 @@ class GameState:
     temperature: int
     oxygen: int
     oceans: int
-    player_resources: Dict[str, Dict[str, int]]  # player_id -> resource -> amount
-    player_production: Dict[str, Dict[str, int]]  # player_id -> resource -> production
     player_vp: Dict[str, Dict[str, Any]]  # player_id -> VP breakdown
     milestones: Dict[str, Dict[str, Any]]  # milestone_name -> details
     awards: Dict[str, Dict[str, Any]]  # award_name -> details
     
     def __post_init__(self):
-        if self.player_resources is None:
-            self.player_resources = {}
-        if self.player_production is None:
-            self.player_production = {}
         if self.player_vp is None:
             self.player_vp = {}
         if self.milestones is None:
@@ -84,8 +78,6 @@ class Player:
     corporation: str
     final_vp: int
     final_tr: int
-    final_resources: Dict[str, int]
-    final_production: Dict[str, int]
     vp_breakdown: Dict[str, Any]
     cards_played: List[str]
     milestones_claimed: List[str]
@@ -164,8 +156,7 @@ class Parser:
         # Build final game state
         final_state = moves_with_states[-1].game_state if moves_with_states else GameState(
             move_index=0, generation=1, temperature=-30, oxygen=0, oceans=0,
-            player_resources={}, player_production={}, player_vp={},
-            milestones={}, awards={}
+            player_vp={}, milestones={}, awards={}
         )
         
         # Determine winner
@@ -227,8 +218,6 @@ class Parser:
                 corporation=corporations.get(player_name, 'Unknown'),
                 final_vp=final_vp,
                 final_tr=vp_breakdown.get('tr', 20),
-                final_resources={},  # Will be populated from moves
-                final_production={},  # Will be populated from moves
                 vp_breakdown=vp_breakdown,
                 cards_played=[],  # Will be populated from moves
                 milestones_claimed=[],  # Will be populated from moves
@@ -572,43 +561,12 @@ class Parser:
                 return max(0, value)  # Other resources can't be negative
 
     def _build_game_states(self, moves: List[Move], vp_progression: List[Dict[str, Any]], players_info: Dict[str, Player]) -> List[Move]:
-        """Build game states for each move with enhanced VP, milestone, and award tracking"""
+        """Build game states for each move with VP, milestone, and award tracking"""
         # Initialize tracking variables
         current_temp = -30
         current_oxygen = 0
         current_oceans = 0
         current_generation = 1
-        
-        # Track resources and production for each player with proper starting values
-        player_resources = {}
-        player_production = {}
-        
-        for pid in players_info.keys():
-            # Starting resources in Terraforming Mars
-            player_resources[pid] = {
-                'M€': 0,      # Starting M€ varies by corporation
-                'Steel': 0,
-                'Titanium': 0,
-                'Plant': 0,
-                'Energy': 0,
-                'Heat': 0,
-                'TR': 20      # Starting TR is always 20
-            }
-            
-            # Starting production in Terraforming Mars
-            player_production[pid] = {
-                'M€': 1,      # Base M€ production is 1
-                'Steel': 0,
-                'Titanium': 0,
-                'Plant': 0,
-                'Energy': 0,
-                'Heat': 0
-            }
-        
-        # Note: We don't apply resource/production changes from moves to our tracking
-        # because the move parsing may be incomplete or inaccurate.
-        # Instead, we rely on the VP data from g_gamelogs for accurate resource tracking.
-        # Our resource/production tracking here is mainly for validation and basic state tracking.
         
         # Track milestones and awards state throughout the game
         current_milestones = {}
@@ -639,30 +597,6 @@ class Parser:
                 gen_match = re.search(r'New generation (\d+)', move.description)
                 if gen_match:
                     current_generation = int(gen_match.group(1))
-            
-            # Update player resources and production with validation
-            if move.player_id in player_resources:
-                # Apply resource changes with validation
-                for resource, change in move.resource_changes.items():
-                    old_value = player_resources[move.player_id].get(resource, 0)
-                    new_value = old_value + change
-                    validated_value = self._validate_resource_value(resource, new_value, is_production=False)
-                    
-                    if validated_value != new_value:
-                        logger.warning(f"Move {move.move_number}: Clamped {resource} from {new_value} to {validated_value} for player {move.player_id}")
-                    
-                    player_resources[move.player_id][resource] = validated_value
-                
-                # Apply production changes with validation
-                for resource, change in move.production_changes.items():
-                    old_value = player_production[move.player_id].get(resource, 0)
-                    new_value = old_value + change
-                    validated_value = self._validate_resource_value(resource, new_value, is_production=True)
-                    
-                    if validated_value != new_value:
-                        logger.warning(f"Move {move.move_number}: Clamped {resource} production from {new_value} to {validated_value} for player {move.player_id}")
-                    
-                    player_production[move.player_id][resource] = validated_value
             
             # Update milestone and award tracking
             if move.action_type == 'claim_milestone':
@@ -696,15 +630,13 @@ class Parser:
             else:
                 logger.debug(f"No VP data found for move {move.move_number}")
             
-            # Create game state with corrected move_index
+            # Create game state (without resource/production tracking)
             game_state = GameState(
                 move_index=move.move_number - 1,  # Use move_number - 1 for 0-based indexing
                 generation=current_generation,
                 temperature=current_temp,
                 oxygen=current_oxygen,
                 oceans=current_oceans,
-                player_resources=dict(player_resources),
-                player_production=dict(player_production),
                 player_vp=move_vp_data,
                 milestones=dict(current_milestones),
                 awards=dict(current_awards)
