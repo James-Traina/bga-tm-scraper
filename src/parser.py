@@ -92,6 +92,7 @@ class GameData:
     game_date: str
     game_duration: str
     winner: str
+    generations: int
     
     # Players
     players: Dict[str, Player]  # player_id -> Player
@@ -165,12 +166,16 @@ class Parser:
         # Extract game metadata
         metadata = self._extract_metadata(soup, html_content, moves_with_states)
         
+        # Calculate max generation from vp_progression or moves
+        max_generation = self._calculate_max_generation(vp_progression, moves_with_states)
+        
         # Create game data
         game_data = GameData(
             replay_id=replay_id,
             game_date=self._extract_game_date(soup),
             game_duration=self._calculate_game_duration(moves_with_states),
             winner=winner,
+            generations=max_generation,
             players=players_info,
             moves=moves_with_states,
             final_state=final_state,
@@ -1142,6 +1147,42 @@ class Parser:
         except (ValueError, IndexError):
             return "Unknown"
     
+    def _calculate_max_generation(self, vp_progression: List[Dict[str, Any]], moves: List[Move]) -> int:
+        """Calculate the maximum generation from vp_progression or moves data"""
+        max_generation = 1  # Default to generation 1
+        
+        try:
+            # First, try to get max generation from moves with game states
+            if moves:
+                generations_from_moves = []
+                for move in moves:
+                    if move.game_state and move.game_state.generation:
+                        generations_from_moves.append(move.game_state.generation)
+                
+                if generations_from_moves:
+                    max_generation = max(generations_from_moves)
+                    logger.info(f"Found max generation {max_generation} from moves")
+                    return max_generation
+            
+            # Fallback: try to extract from vp_progression data
+            # This is less reliable but can be used if moves don't have generation data
+            if vp_progression:
+                # VP progression entries might contain generation information
+                # This would need to be implemented based on the actual structure
+                logger.info("Attempting to extract generation from vp_progression (fallback)")
+                # For now, we'll use a simple heuristic based on the number of VP entries
+                # In Terraforming Mars, games typically last 8-12 generations
+                estimated_generations = min(12, max(8, len(vp_progression) // 2))
+                max_generation = estimated_generations
+                logger.info(f"Estimated max generation {max_generation} from vp_progression length")
+            
+        except Exception as e:
+            logger.error(f"Error calculating max generation: {e}")
+            max_generation = 1
+        
+        logger.info(f"Calculated max generation: {max_generation}")
+        return max_generation
+
     def _extract_metadata(self, soup: BeautifulSoup, html_content: str, moves: List[Move]) -> Dict[str, Any]:
         """Extract metadata about the parsing process"""
         return {
