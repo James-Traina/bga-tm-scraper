@@ -1,6 +1,6 @@
 {
   "replay_id": "688769496",
-  "game_date": "2025-06-16",
+  "game_date": "2025-06-17",
   "game_duration": "00:55",
   "winner": "StrandedKnight",
   "players": {
@@ -47,7 +47,13 @@
         "Gardener",
         "Terraformer"
       ],
-      "awards_funded": []
+      "awards_funded": [],
+      "elo_data": {
+        "arena_points": 1769,
+        "arena_points_change": -24,
+        "game_rank": 564,
+        "game_rank_change": -14
+      }
     },
     "86296239": {
       "player_id": "86296239",
@@ -119,7 +125,13 @@
         "Thermalist",
         "Miner",
         "Scientist"
-      ]
+      ],
+      "elo_data": {
+        "arena_points": 1754,
+        "arena_points_change": 24,
+        "game_rank": 453,
+        "game_rank_change": 14
+      }
     }
   },
   "moves": [
@@ -27033,9 +27045,9 @@
     }
   ],
   "metadata": {
-    "parsed_at": "2025-06-16T23:47:42.365892",
+    "parsed_at": "2025-06-17T10:11:43.214409",
     "total_moves": 366,
-    "html_length": 4592166,
+    "html_length": 4592230,
     "parser_version": "1.0.0",
     "features_extracted": [
       "moves",
@@ -27043,6 +27055,8 @@
       "vp_progression",
       "parameter_progression",
       "player_data"
-    ]
+    ],
+    "elo_data_included": true,
+    "elo_players_found": 2
   }
 }

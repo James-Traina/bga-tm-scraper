@@ -226,7 +226,7 @@ class TMScraper:
     
     def extract_player_ids_from_table(self, html_content: str) -> List[str]:
         """
-        Extract player IDs from table page HTML
+        Extract player IDs from table page HTML using efficient BeautifulSoup parsing
         
         Args:
             html_content: HTML content of the table page
@@ -237,28 +237,71 @@ class TMScraper:
         player_ids = []
         
         try:
-            # Look for player ID patterns in the HTML
-            # BGA player IDs are typically 8+ digit numbers
-            player_id_patterns = [
-                r'player[^>]*?(\d{8,})',
-                r'(\d{8,})[^>]*?player',
-                r'playername[^>]*?(\d{8,})',
-                r'(\d{8,})[^>]*?playername',
-            ]
+            logger.info("Parsing HTML with BeautifulSoup...")
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            for pattern in player_id_patterns:
-                matches = re.findall(pattern, html_content, re.IGNORECASE)
-                for match in matches:
-                    if len(match) >= 8 and match not in player_ids:
+            # Method 1: Look for elements with player IDs in common attributes
+            logger.info("Searching for player IDs in element attributes...")
+            
+            # Look for elements with IDs containing player IDs
+            for element in soup.find_all(attrs={'id': True}):
+                element_id = element.get('id', '')
+                # Look for 8+ digit numbers in IDs
+                id_matches = re.findall(r'\d{8,}', element_id)
+                for match in id_matches:
+                    if match not in player_ids:
                         player_ids.append(match)
             
-            # Remove duplicates while preserving order
+            # Look for elements with classes containing player IDs
+            for element in soup.find_all(attrs={'class': True}):
+                classes = element.get('class', [])
+                for class_name in classes:
+                    class_matches = re.findall(r'\d{8,}', str(class_name))
+                    for match in class_matches:
+                        if match not in player_ids:
+                            player_ids.append(match)
+            
+            # Method 2: Look for data attributes
+            logger.info("Searching for player IDs in data attributes...")
+            for element in soup.find_all(attrs=lambda x: any(attr.startswith('data-') for attr in x.keys()) if x else False):
+                for attr_name, attr_value in element.attrs.items():
+                    if attr_name.startswith('data-'):
+                        data_matches = re.findall(r'\d{8,}', str(attr_value))
+                        for match in data_matches:
+                            if match not in player_ids:
+                                player_ids.append(match)
+            
+            # Method 3: Look in href attributes (links to player profiles)
+            logger.info("Searching for player IDs in links...")
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if 'player' in href.lower():
+                    href_matches = re.findall(r'\d{8,}', href)
+                    for match in href_matches:
+                        if match not in player_ids:
+                            player_ids.append(match)
+            
+            # Method 4: Fallback - limited regex search on smaller chunks
+            if not player_ids:
+                logger.info("Fallback: searching in text content around player names...")
+                player_name_elements = soup.find_all('span', class_='playername')
+                for elem in player_name_elements:
+                    # Get parent elements and search in a limited scope
+                    parent = elem.parent
+                    if parent:
+                        parent_text = str(parent)[:1000]  # Limit to 1000 chars to avoid backtracking
+                        simple_matches = re.findall(r'\b\d{8,}\b', parent_text)
+                        for match in simple_matches:
+                            if match not in player_ids:
+                                player_ids.append(match)
+            
+            # Remove duplicates while preserving order and filter valid IDs
             unique_player_ids = []
             for pid in player_ids:
-                if pid not in unique_player_ids:
+                if len(pid) >= 8 and len(pid) <= 12 and pid not in unique_player_ids:  # Reasonable length for player IDs
                     unique_player_ids.append(pid)
             
-            logger.info(f"Extracted {len(unique_player_ids)} player IDs from table page")
+            logger.info(f"Extracted {len(unique_player_ids)} player IDs from table page: {unique_player_ids}")
             return unique_player_ids
             
         except Exception as e:
@@ -282,6 +325,12 @@ class TMScraper:
         
         replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
         logger.info(f"Scraping replay page: {replay_url}")
+        
+        # Check if we're still logged in before scraping replay
+        if not self._check_login_status():
+            logger.warning("Session expired, requesting re-login...")
+            print("\n⚠️  Session expired! Please log in again.")
+            self.login_to_bga()
         
         # Use existing scrape_replay method with constructed URL
         return self.scrape_replay(replay_url, save_raw, raw_data_dir)
@@ -317,11 +366,29 @@ class TMScraper:
             
             # Check if we got an error page
             page_source = self.driver.page_source
-            if 'must be logged' in page_source.lower():
-                print("❌ Authentication error - please make sure you're logged into BGA")
-                return None
             
-            if 'fatal error' in page_source.lower():
+            # Check for authentication errors and retry once
+            if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
+                logger.warning("Authentication error detected, attempting re-login...")
+                print("⚠️  Session expired! Attempting to re-authenticate...")
+                
+                # Try to re-authenticate
+                self.login_to_bga()
+                
+                # Retry the replay page
+                print(f"Retrying replay page: {url}")
+                self.driver.get(url)
+                time.sleep(5)
+                
+                # Check again
+                page_source = self.driver.page_source
+                if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
+                    print("❌ Authentication failed even after re-login")
+                    return None
+                else:
+                    print("✅ Re-authentication successful!")
+            
+            if 'fatal error' in page_source.lower() and 'must be logged' not in page_source.lower():
                 print("❌ Fatal error on page - replay might not be accessible")
                 return None
             
@@ -459,6 +526,38 @@ class TMScraper:
             except:
                 pass
     
+    def _check_login_status(self) -> bool:
+        """Check if we're still logged into BGA"""
+        try:
+            if not self.driver:
+                return False
+            
+            # Check current page for login indicators
+            page_source = self.driver.page_source.lower()
+            
+            # If we see login indicators, we're logged out
+            if any(indicator in page_source for indicator in ['must be logged', 'login', 'sign in']):
+                return False
+            
+            # If we see logout indicators, we're logged in
+            if any(indicator in page_source for indicator in ['logout', 'my account', 'player_name']):
+                return True
+            
+            # If unclear, try a quick navigation to main page to check
+            current_url = self.driver.current_url
+            self.driver.get("https://boardgamearena.com")
+            time.sleep(2)
+            
+            page_source = self.driver.page_source.lower()
+            is_logged_in = any(indicator in page_source for indicator in ['logout', 'my account', 'player_name'])
+            
+            logger.info(f"Login status check: {'logged in' if is_logged_in else 'logged out'}")
+            return is_logged_in
+            
+        except Exception as e:
+            logger.error(f"Error checking login status: {e}")
+            return False
+
     def _extract_replay_id(self, url: str) -> Optional[str]:
         """Extract replay ID from BGA replay URL (table parameter)"""
         try:

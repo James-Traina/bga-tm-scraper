@@ -838,17 +838,20 @@ class Parser:
         elo_data = {}
         
         try:
-            # Look for ranking details sections
-            rank_sections = soup.find_all('div', class_='rankdetails')
+            # Use score-entry sections which contain complete player data
+            score_entries = soup.find_all('div', class_='score-entry')
+            logger.info(f"Found {len(score_entries)} score entries")
             
-            for rank_section in rank_sections:
-                player_elo = self._parse_single_player_elo(rank_section, table_html)
+            for entry in score_entries:
+                player_elo = self._parse_player_from_score_entry(entry)
                 if player_elo and 'player_name' in player_elo:
                     player_name = player_elo.pop('player_name')
                     elo_data[player_name] = EloData(**player_elo)
+                    logger.info(f"Parsed ELO data for {player_name}")
             
-            # If no rankdetails found, try alternative parsing methods
+            # Fallback: try alternative parsing methods if score-entry method fails
             if not elo_data:
+                logger.info("Fallback: trying alternative ELO parsing methods")
                 elo_data = self._parse_elo_alternative_methods(soup, table_html)
             
             logger.info(f"Successfully parsed ELO data for {len(elo_data)} players")
@@ -858,6 +861,65 @@ class Parser:
             logger.error(f"Error parsing ELO data: {e}")
             return {}
     
+    def _parse_player_from_score_entry(self, score_entry: Tag) -> Optional[Dict[str, Any]]:
+        """Parse ELO data for a single player from their score entry section"""
+        try:
+            player_data = {}
+            
+            # Extract player name
+            player_elem = score_entry.find('a', class_='playername')
+            if not player_elem:
+                return None
+            
+            player_name = player_elem.get_text().strip()
+            if not player_name or player_name in ['Visitor']:
+                return None
+            
+            player_data['player_name'] = player_name
+            
+            # Find all winpoints in this entry (there should be 2: arena and regular)
+            winpoints = score_entry.find_all('div', class_='winpoints')
+            
+            # Find all newrank in this entry (there should be 2: arena and regular)
+            newranks = score_entry.find_all('div', class_='newrank')
+            
+            # Parse Arena data (first winpoints/newrank pair)
+            if len(winpoints) >= 1:
+                arena_winpoints_text = winpoints[0].get_text().strip()
+                # Extract arena points change
+                arena_change_match = re.search(r'([+-]\d+)', arena_winpoints_text)
+                if arena_change_match:
+                    player_data['arena_points_change'] = int(arena_change_match.group(1))
+            
+            if len(newranks) >= 1:
+                arena_newrank_text = newranks[0].get_text().strip()
+                # Extract arena points (current)
+                arena_points_match = re.search(r'(\d+)\s*pts', arena_newrank_text)
+                if arena_points_match:
+                    player_data['arena_points'] = int(arena_points_match.group(1))
+            
+            # Parse Game ELO data (second winpoints/newrank pair)
+            if len(winpoints) >= 2:
+                game_winpoints_text = winpoints[1].get_text().strip()
+                # Extract game ELO change
+                game_change_match = re.search(r'([+-]\d+)', game_winpoints_text)
+                if game_change_match:
+                    player_data['game_rank_change'] = int(game_change_match.group(1))
+            
+            if len(newranks) >= 2:
+                game_newrank_text = newranks[1].get_text().strip()
+                # Extract game rank (current)
+                game_rank_match = re.search(r'(\d+)', game_newrank_text)
+                if game_rank_match:
+                    player_data['game_rank'] = int(game_rank_match.group(1))
+            
+            logger.info(f"Extracted ELO data for {player_name}: {player_data}")
+            return player_data if len(player_data) > 1 else None  # Must have more than just player_name
+            
+        except Exception as e:
+            logger.error(f"Error parsing player from score entry: {e}")
+            return None
+
     def _parse_single_player_elo(self, rank_section: Tag, html_content: str) -> Optional[Dict[str, Any]]:
         """Parse ELO data for a single player from their rank section"""
         try:
