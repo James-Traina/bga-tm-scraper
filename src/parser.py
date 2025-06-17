@@ -4,6 +4,7 @@ Comprehensive parser that extracts all game data into a structured format
 """
 import re
 import json
+import os
 from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -857,7 +858,6 @@ class Parser:
                                 'scoring_data': scoring_data_with_names
                             }
                             scoring_entries.append(scoring_entry)
-                            logger.info(f"Found scoring data for move {entry.get('move_id')} with {len(scoring_data)} players")
             
             logger.info(f"Extracted {len(scoring_entries)} scoring entries from g_gamelogs")
             return scoring_entries
@@ -1578,6 +1578,9 @@ class Parser:
 
     def export_to_json(self, game_data: GameData, output_path: str):
         """Export game data to JSON"""
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
         # Convert dataclasses to dictionaries for JSON serialization
         def convert_to_dict(obj):
             if hasattr(obj, '__dict__'):
