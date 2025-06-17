@@ -548,6 +548,29 @@ class Parser:
             if award_match:
                 player.awards_funded.append(award_match.group(1))
     
+    def _validate_resource_value(self, resource: str, value: int, is_production: bool = False) -> int:
+        """Validate and clamp resource values to valid ranges"""
+        if is_production:
+            # Production minimums in Terraforming Mars
+            minimums = {
+                'M€': -5,  # Can go negative due to certain cards
+                'Steel': 0,
+                'Titanium': 0,
+                'Plant': 0,
+                'Energy': 0,
+                'Heat': 0
+            }
+            min_val = minimums.get(resource, 0)
+            return max(min_val, value)
+        else:
+            # Regular resources can't go below 0 (except M€ which can be negative)
+            if resource == 'M€':
+                return value  # M€ can be negative
+            elif resource == 'TR':
+                return max(20, min(63, value))  # TR range is 20-63
+            else:
+                return max(0, value)  # Other resources can't be negative
+
     def _build_game_states(self, moves: List[Move], vp_progression: List[Dict[str, Any]], players_info: Dict[str, Player]) -> List[Move]:
         """Build game states for each move with enhanced VP, milestone, and award tracking"""
         # Initialize tracking variables
@@ -556,22 +579,50 @@ class Parser:
         current_oceans = 0
         current_generation = 1
         
-        # Track resources and production for each player
-        player_resources = {pid: {'M€': 0, 'Steel': 0, 'Titanium': 0, 'Plant': 0, 'Energy': 0, 'Heat': 0, 'TR': 20} 
-                          for pid in players_info.keys()}
-        player_production = {pid: {'M€': 0, 'Steel': 0, 'Titanium': 0, 'Plant': 0, 'Energy': 0, 'Heat': 0} 
-                           for pid in players_info.keys()}
+        # Track resources and production for each player with proper starting values
+        player_resources = {}
+        player_production = {}
+        
+        for pid in players_info.keys():
+            # Starting resources in Terraforming Mars
+            player_resources[pid] = {
+                'M€': 0,      # Starting M€ varies by corporation
+                'Steel': 0,
+                'Titanium': 0,
+                'Plant': 0,
+                'Energy': 0,
+                'Heat': 0,
+                'TR': 20      # Starting TR is always 20
+            }
+            
+            # Starting production in Terraforming Mars
+            player_production[pid] = {
+                'M€': 1,      # Base M€ production is 1
+                'Steel': 0,
+                'Titanium': 0,
+                'Plant': 0,
+                'Energy': 0,
+                'Heat': 0
+            }
+        
+        # Note: We don't apply resource/production changes from moves to our tracking
+        # because the move parsing may be incomplete or inaccurate.
+        # Instead, we rely on the VP data from g_gamelogs for accurate resource tracking.
+        # Our resource/production tracking here is mainly for validation and basic state tracking.
         
         # Track milestones and awards state throughout the game
         current_milestones = {}
         current_awards = {}
         
-        # Create a mapping from VP progression to moves for better alignment
+        # Create a mapping from move_id to VP data for proper correlation
         vp_by_move_id = {}
         for vp_entry in vp_progression:
             move_id = vp_entry.get('move_id')
             if move_id:
-                vp_by_move_id[move_id] = vp_entry
+                # Convert move_id to string for consistent matching
+                vp_by_move_id[str(move_id)] = vp_entry.get('vp_data', {})
+        
+        logger.info(f"Built VP mapping for {len(vp_by_move_id)} moves")
         
         # Process each move and build game state
         for i, move in enumerate(moves):
@@ -589,13 +640,29 @@ class Parser:
                 if gen_match:
                     current_generation = int(gen_match.group(1))
             
-            # Update player resources and production
+            # Update player resources and production with validation
             if move.player_id in player_resources:
+                # Apply resource changes with validation
                 for resource, change in move.resource_changes.items():
-                    player_resources[move.player_id][resource] = player_resources[move.player_id].get(resource, 0) + change
+                    old_value = player_resources[move.player_id].get(resource, 0)
+                    new_value = old_value + change
+                    validated_value = self._validate_resource_value(resource, new_value, is_production=False)
+                    
+                    if validated_value != new_value:
+                        logger.warning(f"Move {move.move_number}: Clamped {resource} from {new_value} to {validated_value} for player {move.player_id}")
+                    
+                    player_resources[move.player_id][resource] = validated_value
                 
+                # Apply production changes with validation
                 for resource, change in move.production_changes.items():
-                    player_production[move.player_id][resource] = player_production[move.player_id].get(resource, 0) + change
+                    old_value = player_production[move.player_id].get(resource, 0)
+                    new_value = old_value + change
+                    validated_value = self._validate_resource_value(resource, new_value, is_production=True)
+                    
+                    if validated_value != new_value:
+                        logger.warning(f"Move {move.move_number}: Clamped {resource} production from {new_value} to {validated_value} for player {move.player_id}")
+                    
+                    player_production[move.player_id][resource] = validated_value
             
             # Update milestone and award tracking
             if move.action_type == 'claim_milestone':
@@ -620,26 +687,18 @@ class Parser:
                         'timestamp': move.timestamp
                     }
             
-            # Get VP data for this move - try multiple approaches
-            move_vp_data = {}
+            # Get VP data for this move by matching move_number with move_id
+            move_vp_data = vp_by_move_id.get(str(move.move_number), {})
             
-            # First, try to match by move number or index
-            if i < len(vp_progression):
-                vp_entry = vp_progression[i]
-                move_vp_data = vp_entry.get('vp_data', {})
+            # Log when we find VP data for debugging
+            if move_vp_data:
+                logger.debug(f"Found VP data for move {move.move_number}")
+            else:
+                logger.debug(f"No VP data found for move {move.move_number}")
             
-            # Alternative: try to find VP data that matches this move's timing
-            # This is more complex but could provide better accuracy
-            if not move_vp_data and vp_progression:
-                # Find the closest VP entry by index
-                closest_index = min(i, len(vp_progression) - 1)
-                if closest_index >= 0:
-                    vp_entry = vp_progression[closest_index]
-                    move_vp_data = vp_entry.get('vp_data', {})
-            
-            # Create game state
+            # Create game state with corrected move_index
             game_state = GameState(
-                move_index=i,
+                move_index=move.move_number - 1,  # Use move_number - 1 for 0-based indexing
                 generation=current_generation,
                 temperature=current_temp,
                 oxygen=current_oxygen,
