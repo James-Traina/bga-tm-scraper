@@ -5,6 +5,7 @@ A comprehensive Python tool for scraping and parsing Terraforming Mars game repl
 ## Features
 
 - **Enhanced Web scraping**: Automated data collection from both replay and table pages
+- **Player Game History**: Automatically scrape all table IDs from a player's game history
 - **ELO Data Extraction**: Arena points, game rank, and rating changes for each player
 - **Comprehensive parsing**: Complete game state reconstruction with move-by-move analysis
 - **Rich data extraction**: Players, corporations, cards, resources, terraforming parameters
@@ -39,8 +40,14 @@ The scraper now works with table IDs instead of full replay URLs for enhanced fu
 
 ### 4. Run the Scraper
 
+For individual games:
 ```bash
 python main.py
+```
+
+For player game history:
+```bash
+python test_player_history.py
 ```
 
 ### 5. Parse Game Data
@@ -61,10 +68,40 @@ bga-tm-scraper/
 │   ├── raw/                # Raw HTML files
 │   └── parsed/             # Processed game data
 ├── main.py                 # Scraper entry point
+├── test_player_history.py  # Player game history scraper
 ├── test_parser.py          # Parser testing and demo
 ├── config.py               # Configuration settings
 └── requirements.txt        # Python dependencies
 ```
+
+## Player Game History Scraping
+
+The scraper can now automatically collect all table IDs from a player's game history:
+
+### How It Works
+1. Navigate to a player's game history page
+2. Automatically click "See more" until all games are loaded
+3. Extract table IDs from the complete game list
+4. Optionally scrape detailed data for all found games
+
+### Usage
+```bash
+python test_player_history.py
+```
+
+The script will:
+- Prompt for a player ID
+- Open browser for manual login
+- Automatically load all games by clicking "See more"
+- Extract and save all table IDs
+- Optionally scrape the first 5 games as a sample
+
+### Features
+- **Smart Detection**: Stops when "No more results" banner appears
+- **Progress Tracking**: Shows how many games have been loaded
+- **Safety Limits**: Maximum click limit to prevent infinite loops
+- **Error Handling**: Robust error recovery and logging
+- **Data Export**: Saves table IDs and scraping results to JSON files
 
 ## ELO Data Extraction
 
@@ -156,6 +193,22 @@ The parser generates comprehensive JSON with:
 
 ## Usage Examples
 
+### Player Game History
+```python
+from src.scraper import TMScraper
+
+scraper = TMScraper(chromedriver_path="path/to/chromedriver.exe")
+scraper.start_browser()
+scraper.login_to_bga()
+
+# Get all table IDs for a player
+table_ids = scraper.scrape_player_game_history("86296239")
+print(f"Found {len(table_ids)} games")
+
+# Scrape all games
+results = scraper.scrape_multiple_tables_and_replays(table_ids)
+```
+
 ### Basic Parsing
 ```python
 from src.parser import Parser
@@ -172,6 +225,9 @@ python test_parser.py
 
 # Analyze parsed data
 python test_parser.py analyze
+
+# Scrape player history
+python test_player_history.py
 ```
 
 ## Sample Output

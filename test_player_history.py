@@ -68,12 +68,13 @@ def main():
         # Manual login
         scraper.login_to_bga()
         
-        # Scrape player game history
+        # Scrape player game history (Arena mode filtering happens during individual game scraping)
         print(f"\n🎯 Starting to scrape game history for player {player_id}...")
+        print("Note: Only Arena mode games will be processed during scraping.")
         table_ids = scraper.scrape_player_game_history(
             player_id=player_id,
             max_clicks=50,  # Reasonable limit
-            click_delay=1   # 3 seconds between clicks
+            click_delay=1   # 1 second between clicks
         )
         
         if table_ids:
@@ -102,11 +103,11 @@ def main():
             print(f"\n💾 Results saved to: {results_file}")
             
             # Ask if user wants to scrape some of these games
-            scrape_games = input(f"\nWould you like to scrape the first 5 games? (y/n): ").strip().lower()
+            scrape_games = input(f"\nWould you like to scrape the first 10 games? (y/n): ").strip().lower()
             
             if scrape_games == 'y':
-                print("\n🚀 Starting to scrape and parse first 5 games...")
-                sample_table_ids = table_ids[:5]
+                print("\n🚀 Starting to scrape and parse first 10 games...")
+                sample_table_ids = table_ids[:10]
                 
                 # Initialize parser
                 from src.parser import Parser

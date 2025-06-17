@@ -90,7 +90,7 @@ class TMScraper:
     
     def scrape_table_and_replay(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
-        Scrape both table page and replay page for a game
+        Scrape both table page and replay page for a game, filtering for Arena mode only
         
         Args:
             table_id: BGA table ID
@@ -98,7 +98,7 @@ class TMScraper:
             raw_data_dir: Directory to save raw HTML files
             
         Returns:
-            dict: Combined scraped data or None if failed
+            dict: Combined scraped data or None if failed or not Arena mode
         """
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
@@ -113,7 +113,16 @@ class TMScraper:
                 logger.error(f"Failed to scrape table page for {table_id}")
                 return None
 
-            # Step 2: Extract player IDs from table page
+            # Step 2: Check if this is an Arena mode game using ELO data
+            logger.info("Checking if game is Arena mode using ELO data...")
+            if not self._is_arena_mode_game_by_elo(table_data['html_content']):
+                logger.info(f"Game {table_id} is not Arena mode - skipping")
+                print(f"⏭️  Game {table_id} is not Arena mode - skipping")
+                return None
+
+            print(f"✅ Game {table_id} is Arena mode - proceeding with scraping")
+
+            # Step 3: Extract player IDs from table page
             logger.info("Extracting player IDs...")
             player_ids = self.extract_player_ids_from_table(table_data['html_content'])
             if not player_ids:
@@ -121,7 +130,7 @@ class TMScraper:
                 # Use a default player ID or continue without it
                 player_ids = ["86296239"]  # Fallback from original URL
             
-            # Step 3: Construct and scrape replay page
+            # Step 4: Construct and scrape replay page
             logger.info("Extracting replay...")
             replay_data = self.scrape_replay_from_table(table_id, player_ids[0], save_raw, raw_data_dir)
             if not replay_data:
@@ -129,16 +138,17 @@ class TMScraper:
                 # Continue with just table data
                 replay_data = {}
             
-            # Step 4: Combine results
+            # Step 5: Combine results
             combined_data = {
                 'table_id': table_id,
                 'table_data': table_data,
                 'replay_data': replay_data,
                 'scraped_at': datetime.now().isoformat(),
-                'success': True
+                'success': True,
+                'arena_mode': True
             }
             
-            logger.info(f"Successfully scraped table and replay for game {table_id}")
+            logger.info(f"Successfully scraped Arena mode game {table_id}")
             return combined_data
             
         except Exception as e:
@@ -451,7 +461,7 @@ class TMScraper:
             return None
     
     def scrape_player_game_history(self, player_id: str, max_clicks: int = 100, 
-                                 click_delay: int = 1, filter_arena_season: int = None) -> List[str]:
+                                 click_delay: int = 1) -> List[str]:
         """
         Scrape all table IDs from a player's game history by auto-clicking "See more"
         
@@ -459,7 +469,6 @@ class TMScraper:
             player_id: BGA player ID
             max_clicks: Maximum number of "See more" clicks to prevent infinite loops
             click_delay: Delay between clicks in seconds
-            filter_arena_season: If specified, only return games from this Arena season
             
         Returns:
             list: List of table IDs found in the player's game history
@@ -623,7 +632,6 @@ class TMScraper:
             print("Extracting table IDs from loaded page...")
             page_source = self.driver.page_source
             table_ids = self._extract_table_ids_from_history(page_source)
-            
             logger.info(f"Successfully extracted {len(table_ids)} table IDs from player {player_id}")
             print(f"✅ Found {len(table_ids)} table IDs for player {player_id}")
             
@@ -807,3 +815,179 @@ class TMScraper:
         except Exception as e:
             logger.error(f"Error extracting replay ID from {url}: {e}")
             return None
+
+    def _extract_arena_season_table_ids(self, html_content: str, target_season: int) -> List[str]:
+        """
+        Extract table IDs from player game history HTML, filtering for specific Arena season
+        
+        Args:
+            html_content: HTML content of the player history page
+            target_season: Arena season number to filter for (e.g., 21)
+            
+        Returns:
+            list: List of unique table IDs from the specified Arena season
+        """
+        arena_table_ids = []
+        
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Look for game rows in the history table
+            # Each game should be in a row or container that includes both the table ID and game mode info
+            game_rows = soup.find_all('div', class_='row')
+            
+            for row in game_rows:
+                try:
+                    # Look for table ID in this row
+                    table_id_match = re.search(r'#(\d{8,})', str(row))
+                    if not table_id_match:
+                        continue
+                    
+                    table_id = table_id_match.group(1)
+                    
+                    # Check if this row contains Arena mode information
+                    row_text = row.get_text().lower()
+                    
+                    # Look for Arena mode indicators
+                    if 'arena mode' not in row_text and 'arena' not in row_text:
+                        continue
+                    
+                    # Look for the specific season number
+                    # The HTML shows patterns like "Arena mode: compete for the seasonal BGA trophy." with season info
+                    season_pattern = rf'season\s*{target_season}|{target_season}\s*season'
+                    if re.search(season_pattern, row_text, re.IGNORECASE):
+                        arena_table_ids.append(table_id)
+                        logger.info(f"Found Arena season {target_season} game: {table_id}")
+                        continue
+                    
+                    # Also look for gameoption elements that might contain season info
+                    gameoption_elements = row.find_all(attrs={'id': re.compile(r'gameoption_\d+')})
+                    for elem in gameoption_elements:
+                        elem_text = elem.get_text().lower()
+                        if f'{target_season}' in elem_text and ('arena' in elem_text or 'season' in elem_text):
+                            arena_table_ids.append(table_id)
+                            logger.info(f"Found Arena season {target_season} game via gameoption: {table_id}")
+                            break
+                    
+                except Exception as e:
+                    logger.debug(f"Error processing game row: {e}")
+                    continue
+            
+            # Remove duplicates while preserving order
+            unique_arena_table_ids = []
+            seen = set()
+            for table_id in arena_table_ids:
+                if table_id not in seen and len(table_id) >= 8:
+                    unique_arena_table_ids.append(table_id)
+                    seen.add(table_id)
+            
+            logger.info(f"Extracted {len(unique_arena_table_ids)} Arena season {target_season} table IDs")
+            return unique_arena_table_ids
+            
+        except Exception as e:
+            logger.error(f"Error extracting Arena season table IDs: {e}")
+            return []
+
+    def check_game_is_arena_season(self, table_id: str, target_season: int) -> bool:
+        """
+        Check if a specific game is from the target Arena season by scraping its table page
+        
+        Args:
+            table_id: BGA table ID
+            target_season: Arena season number to check for (e.g., 21)
+            
+        Returns:
+            bool: True if the game is from the target Arena season, False otherwise
+        """
+        if not self.driver:
+            raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        try:
+            # Scrape the table page to get game mode information
+            table_data = self.scrape_table_page(table_id, save_raw=False)
+            if not table_data:
+                logger.warning(f"Could not scrape table page for {table_id}")
+                return False
+            
+            html_content = table_data['html_content']
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Look for Arena mode indicators
+            page_text = soup.get_text().lower()
+            
+            # Check for Arena mode
+            if 'arena mode' not in page_text and 'arena' not in page_text:
+                logger.info(f"Game {table_id} is not Arena mode")
+                return False
+            
+            # Check for the specific season
+            season_pattern = rf'season\s*{target_season}|{target_season}\s*season'
+            if re.search(season_pattern, page_text, re.IGNORECASE):
+                logger.info(f"Game {table_id} is Arena season {target_season}")
+                return True
+            
+            # Also check gameoption elements specifically
+            gameoption_elements = soup.find_all(attrs={'id': re.compile(r'gameoption_\d+')})
+            for elem in gameoption_elements:
+                elem_text = elem.get_text().lower()
+                if f'{target_season}' in elem_text and ('arena' in elem_text or 'season' in elem_text):
+                    logger.info(f"Game {table_id} is Arena season {target_season} (via gameoption)")
+                    return True
+            
+            logger.info(f"Game {table_id} is Arena mode but not season {target_season}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking Arena season for game {table_id}: {e}")
+            return False
+
+
+    def _is_arena_mode_game_by_elo(self, html_content: str) -> bool:
+        """
+        Check if a game is Arena mode based on ELO data (arena_points and arena_points_change)
+        
+        Args:
+            html_content: HTML content of the table page
+            
+        Returns:
+            bool: True if the game is Arena mode, False otherwise
+        """
+        try:
+            # Import parser to use its ELO parsing functionality
+            from src.parser import Parser
+            parser = Parser()
+            
+            # Parse ELO data from the table HTML
+            elo_data = parser.parse_elo_data(html_content)
+            
+            if not elo_data:
+                logger.info("No ELO data found - assuming not Arena mode")
+                return False
+            
+            # Check if any player has non-null arena_points or arena_points_change
+            arena_players = 0
+            total_players = len(elo_data)
+            
+            for player_name, elo_info in elo_data.items():
+                # Check if this player has meaningful Arena data
+                # Both arena_points and arena_points_change should be non-null for a true Arena game
+                if elo_info.arena_points is not None and elo_info.arena_points_change is not None:
+                    arena_players += 1
+                    logger.debug(f"Player {player_name} has Arena data: points={elo_info.arena_points}, change={elo_info.arena_points_change}")
+                else:
+                    logger.debug(f"Player {player_name} has incomplete/no Arena data: points={elo_info.arena_points}, change={elo_info.arena_points_change}")
+            
+            # If any player has Arena data, it's an Arena game
+            is_arena = arena_players > 0
+            
+            if is_arena:
+                logger.info(f"Game is Arena mode - {arena_players}/{total_players} players have Arena data")
+            else:
+                logger.info(f"Game is not Arena mode - {arena_players}/{total_players} players have Arena data (all null)")
+            
+            return is_arena
+            
+        except Exception as e:
+            logger.error(f"Error checking Arena mode by ELO: {e}")
+            # If there's an error parsing ELO data, assume it's not Arena mode
+            return False
