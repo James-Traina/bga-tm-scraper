@@ -330,13 +330,8 @@ class TMScraper:
         replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
         logger.info(f"Scraping replay page: {replay_url}")
         
-        # Check if we're still logged in before scraping replay
-        if not self._check_login_status():
-            logger.warning("Session expired, requesting re-login...")
-            print("\n⚠️  Session expired! Please log in again.")
-            self.login_to_bga()
-        
         # Use existing scrape_replay method with constructed URL
+        # The scrape_replay method already has robust error handling for authentication issues
         return self.scrape_replay(replay_url, save_raw, raw_data_dir)
 
     def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
