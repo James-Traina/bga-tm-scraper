@@ -122,7 +122,15 @@ class TMScraper:
             if not self._is_arena_mode_game_by_elo(table_data['html_content']):
                 logger.info(f"Game {table_id} is not Arena mode - skipping")
                 print(f"⏭️  Game {table_id} is not Arena mode - skipping")
-                return None
+                return {
+                    'table_id': table_id,
+                    'success': False,
+                    'skipped': True,
+                    'skip_reason': 'not_arena_mode',
+                    'scraped_at': datetime.now().isoformat(),
+                    'table_data': table_data,
+                    'replay_data': None
+                }
 
             print(f"✅ Game {table_id} is Arena mode - proceeding with scraping")
 

@@ -50,7 +50,6 @@ def main():
         print("❌ No player ID provided!")
         return
     
-    # Ask about Arena season 21 filtering
     filter_arena_season_21 = True
     
     if filter_arena_season_21:
@@ -139,10 +138,35 @@ def main():
                 
                 if scraping_result:
                     scraping_results.append(scraping_result)
-                    print(f"✅ Successfully scraped game {table_id}")
                     
-                    # Parse immediately after scraping
-                    print(f"Parsing game {table_id}...")
+                    # Check if this was a successful scrape or a skip
+                    if scraping_result.get('success', False):
+                        print(f"✅ Successfully scraped game {table_id}")
+                        
+                        # Parse immediately after scraping
+                        print(f"Parsing game {table_id}...")
+                    elif scraping_result.get('skipped', False):
+                        skip_reason = scraping_result.get('skip_reason', 'unknown')
+                        if skip_reason == 'not_arena_mode':
+                            print(f"⏭️  Skipped game {table_id} - Not Arena mode")
+                        elif skip_reason == 'not_arena_season_21':
+                            print(f"⏭️  Skipped game {table_id} - Outside Arena season 21 date range")
+                        else:
+                            print(f"⏭️  Skipped game {table_id} - {skip_reason}")
+                        
+                        # Add to parsing results as skipped
+                        parsing_results.append({
+                            'table_id': table_id,
+                            'success': False,
+                            'skipped': True,
+                            'skip_reason': skip_reason
+                        })
+                        continue  # Skip to next game
+                    else:
+                        print(f"✅ Successfully scraped game {table_id}")
+                        
+                        # Parse immediately after scraping
+                        print(f"Parsing game {table_id}...")
                     try:
                         # Read the HTML files
                         table_html_path = os.path.join(RAW_DATA_DIR, f"table_{table_id}.html")
@@ -208,78 +232,101 @@ def main():
                     import time
                     time.sleep(REQUEST_DELAY)
             
-                print(f"\n✅ Processing complete!")
-                print(f"   Games scraped: {len(scraping_results)}/{len(table_ids_to_scrape)}")
-                print(f"   Games parsed: {len([r for r in parsing_results if r['success']])}/{len(table_ids_to_scrape)}")
-                
-                # Create clean scraping summary (without large HTML content)
-                clean_scraping_results = []
-                for result in scraping_results:
-                    clean_result = {
-                        'table_id': result['table_id'],
-                        'scraped_at': result['scraped_at'],
-                        'success': result['success']
-                    }
-                    
-                    # Add table data summary without HTML content
-                    if 'table_data' in result and result['table_data']:
-                        clean_result['table_data'] = {
-                            'url': result['table_data'].get('url'),
-                            'players_found': result['table_data'].get('players_found', []),
-                            'elo_data_found': result['table_data'].get('elo_data_found', False),
-                            'html_length': result['table_data'].get('html_length', 0)
-                        }
-                    
-                    # Add replay data summary without HTML content
-                    if 'replay_data' in result and result['replay_data']:
-                        clean_result['replay_data'] = {
-                            'url': result['replay_data'].get('url'),
-                            'title': result['replay_data'].get('title'),
-                            'players': result['replay_data'].get('players', []),
-                            'game_logs_found': result['replay_data'].get('game_logs_found', False),
-                            'num_moves': result['replay_data'].get('num_moves', 0),
-                            'html_length': result['replay_data'].get('html_length', 0)
-                        }
-                    
-                    clean_scraping_results.append(clean_result)
-                
-                # Save comprehensive summary
-                scraping_summary_file = f"data/processed/player_{player_id}_complete_summary_{timestamp}.json"
-                scraping_summary = {
-                    'player_id': player_id,
-                    'scraped_at': datetime.now().isoformat(),
-                    'total_games_found': len(games_data),
-                    'games_scraped': len(table_ids_to_scrape),
-                    'successful_scrapes': len(scraping_results),
-                    'successful_parses': len([r for r in parsing_results if r['success']]),
-                    'games_data': games_data,  # Include datetime info for processed games
-                    'scraping_results': clean_scraping_results,
-                    'parsing_results': parsing_results
+            print(f"\n✅ Processing complete!")
+            
+            # Calculate statistics
+            successful_scrapes = len([r for r in scraping_results if r.get('success', False)])
+            skipped_games = len([r for r in scraping_results if r.get('skipped', False)])
+            failed_scrapes = len([r for r in scraping_results if not r.get('success', False) and not r.get('skipped', False)])
+            successful_parses = len([r for r in parsing_results if r.get('success', False)])
+            skipped_parses = len([r for r in parsing_results if r.get('skipped', False)])
+            failed_parses = len([r for r in parsing_results if not r.get('success', False) and not r.get('skipped', False)])
+            
+            print(f"   ✅ Successfully scraped: {successful_scrapes}")
+            print(f"   ⏭️  Skipped: {skipped_games}")
+            print(f"   ❌ Failed: {failed_scrapes}")
+            print(f"   ✅ Successfully parsed: {successful_parses}")
+            
+            # Create clean scraping summary (without large HTML content)
+            clean_scraping_results = []
+            for result in scraping_results:
+                clean_result = {
+                    'table_id': result['table_id'],
+                    'scraped_at': result['scraped_at'],
+                    'success': result['success']
                 }
                 
-                with open(scraping_summary_file, 'w', encoding='utf-8') as f:
-                    json.dump(scraping_summary, f, indent=2, ensure_ascii=False)
+                # Add skip information if present
+                if result.get('skipped', False):
+                    clean_result['skipped'] = True
+                    clean_result['skip_reason'] = result.get('skip_reason', 'unknown')
                 
-                print(f"💾 Complete summary saved to: {scraping_summary_file}")
+                # Add table data summary without HTML content
+                if 'table_data' in result and result['table_data']:
+                    clean_result['table_data'] = {
+                        'url': result['table_data'].get('url'),
+                        'players_found': result['table_data'].get('players_found', []),
+                        'elo_data_found': result['table_data'].get('elo_data_found', False),
+                        'html_length': result['table_data'].get('html_length', 0)
+                    }
                 
-                # Print detailed summary
-                print(f"\n=== Complete Processing Summary ===")
-                print(f"Total games found: {len(games_data)}")
-                print(f"Games scraped: {len(scraping_results)}")
-                print(f"Games parsed: {len([r for r in parsing_results if r['success']])}")
-                print(f"Games with ELO data: {len([r for r in parsing_results if r.get('elo_data_included', False)])}")
+                # Add replay data summary without HTML content
+                if 'replay_data' in result and result['replay_data']:
+                    clean_result['replay_data'] = {
+                        'url': result['replay_data'].get('url'),
+                        'title': result['replay_data'].get('title'),
+                        'players': result['replay_data'].get('players', []),
+                        'game_logs_found': result['replay_data'].get('game_logs_found', False),
+                        'num_moves': result['replay_data'].get('num_moves', 0),
+                        'html_length': result['replay_data'].get('html_length', 0)
+                    }
                 
-                for result in parsing_results:
-                    if result['success']:
-                        print(f"\nGame {result['table_id']}:")
-                        print(f"  Players: {result['players_count']}")
-                        print(f"  Moves: {result['moves_count']}")
-                        print(f"  ELO data: {'✅' if result['elo_data_included'] else '❌'}")
-                        if result['elo_data_included']:
-                            print(f"  ELO players: {result['elo_players_found']}")
-                        print(f"  Output: {result['output_file']}")
-                    else:
-                        print(f"\nGame {result['table_id']}: ❌ Failed - {result.get('error', 'Unknown error')}")
+                clean_scraping_results.append(clean_result)
+            
+            # Save comprehensive summary
+            scraping_summary_file = f"data/processed/player_{player_id}_complete_summary_{timestamp}.json"
+            scraping_summary = {
+                'player_id': player_id,
+                'scraped_at': datetime.now().isoformat(),
+                'total_games_found': len(games_data),
+                'games_scraped': len(table_ids_to_scrape),
+                'successful_scrapes': successful_scrapes,
+                'skipped_games': skipped_games,
+                'failed_scrapes': failed_scrapes,
+                'successful_parses': successful_parses,
+                'games_data': games_data,  # Include datetime info for processed games
+                'scraping_results': clean_scraping_results,
+                'parsing_results': parsing_results
+            }
+            
+            with open(scraping_summary_file, 'w', encoding='utf-8') as f:
+                json.dump(scraping_summary, f, indent=2, ensure_ascii=False)
+            
+            print(f"💾 Complete summary saved to: {scraping_summary_file}")
+            
+            # Print detailed summary
+            print(f"\n=== Complete Processing Summary ===")
+            print(f"Total games found: {len(games_data)}")
+            print(f"✅ Successfully scraped: {successful_scrapes}")
+            print(f"⏭️  Skipped: {skipped_games}")
+            print(f"❌ Failed: {failed_scrapes}")
+            print(f"✅ Successfully parsed: {successful_parses}")
+            print(f"Games with ELO data: {len([r for r in parsing_results if r.get('elo_data_included', False)])}")
+            
+            for result in parsing_results:
+                if result.get('success', False):
+                    print(f"\nGame {result['table_id']}:")
+                    print(f"  Players: {result['players_count']}")
+                    print(f"  Moves: {result['moves_count']}")
+                    print(f"  ELO data: {'✅' if result['elo_data_included'] else '❌'}")
+                    if result['elo_data_included']:
+                        print(f"  ELO players: {result['elo_players_found']}")
+                    print(f"  Output: {result['output_file']}")
+                elif result.get('skipped', False):
+                    skip_reason = result.get('skip_reason', 'unknown')
+                    print(f"\nGame {result['table_id']}: ⏭️  Skipped - {skip_reason}")
+                else:
+                    print(f"\nGame {result['table_id']}: ❌ Failed - {result.get('error', 'Unknown error')}")
             
         else:
             print("❌ No table IDs found. This could be due to:")
