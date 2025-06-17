@@ -263,13 +263,17 @@ class TMScraper:
             
             # Method 2: Look for data attributes
             logger.info("Searching for player IDs in data attributes...")
-            for element in soup.find_all(attrs=lambda x: any(attr.startswith('data-') for attr in x.keys()) if x else False):
-                for attr_name, attr_value in element.attrs.items():
-                    if attr_name.startswith('data-'):
-                        data_matches = re.findall(r'\d{8,}', str(attr_value))
-                        for match in data_matches:
-                            if match not in player_ids:
-                                player_ids.append(match)
+            for element in soup.find_all(attrs=lambda x: any(attr.startswith('data-') for attr in x.keys()) if x and hasattr(x, 'keys') else False):
+                try:
+                    for attr_name, attr_value in element.attrs.items():
+                        if attr_name.startswith('data-'):
+                            data_matches = re.findall(r'\d{8,}', str(attr_value))
+                            for match in data_matches:
+                                if match not in player_ids:
+                                    player_ids.append(match)
+                except (AttributeError, TypeError) as e:
+                    logger.debug(f"Skipping element due to attribute error: {e}")
+                    continue
             
             # Method 3: Look in href attributes (links to player profiles)
             logger.info("Searching for player IDs in links...")

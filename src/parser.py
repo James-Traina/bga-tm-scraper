@@ -184,13 +184,18 @@ class Parser:
     
     def _extract_players_info(self, soup: BeautifulSoup, html_content: str) -> Dict[str, Player]:
         """Extract comprehensive player information"""
-        # Get player names
+        # Get player names from span elements
         player_names = []
         player_elements = soup.find_all('span', class_='playername')
         for elem in player_elements:
             player_name = elem.get_text().strip()
             if player_name and player_name not in player_names:
                 player_names.append(player_name)
+        
+        # Fallback: Extract player names from move descriptions if no playername spans found
+        if not player_names:
+            logger.info("No playername spans found, extracting from move descriptions")
+            player_names = self._extract_player_names_from_moves(soup)
         
         # Get player ID mapping
         player_id_map = self._extract_player_id_mapping(html_content, player_names)
@@ -224,7 +229,41 @@ class Parser:
                 awards_funded=[]  # Will be populated from moves
             )
         
+        logger.info(f"Extracted {len(players)} players: {list(players.keys())}")
         return players
+    
+    def _extract_player_names_from_moves(self, soup: BeautifulSoup) -> List[str]:
+        """Extract player names from move descriptions as fallback"""
+        player_names = set()
+        
+        # Look for player names in move descriptions
+        log_entries = soup.find_all('div', class_='gamelogreview')
+        for entry in log_entries:
+            text = entry.get_text()
+            
+            # Look for patterns like "PlayerName plays card", "PlayerName chooses corporation", etc.
+            patterns = [
+                r'(\w+(?:\s+\w+)*) plays card',
+                r'(\w+(?:\s+\w+)*) chooses corporation',
+                r'(\w+(?:\s+\w+)*) gains',
+                r'(\w+(?:\s+\w+)*) pays',
+                r'(\w+(?:\s+\w+)*) increases',
+                r'(\w+(?:\s+\w+)*) places',
+                r'(\w+(?:\s+\w+)*) claims milestone',
+                r'(\w+(?:\s+\w+)*) funds.*award'
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, text)
+                for match in matches:
+                    # Clean up the match and add if it looks like a player name
+                    name = match.strip()
+                    if name and len(name) > 1 and name not in ['You', 'Module', 'Map']:
+                        player_names.add(name)
+        
+        result = list(player_names)
+        logger.info(f"Extracted {len(result)} player names from moves: {result}")
+        return result
     
     def _extract_all_moves(self, soup: BeautifulSoup, players_info: Dict[str, Player]) -> List[Move]:
         """Extract all moves with detailed information"""
@@ -1040,12 +1079,23 @@ class Parser:
             text = entry.get_text()
             if 'chooses corporation' in text:
                 # Pattern: "PlayerName chooses corporation CorporationName"
-                match = re.search(r'(\w+) chooses corporation (.+)', text)
+                # Updated to handle multi-word player names
+                match = re.search(r'([A-Za-z][A-Za-z0-9\s]+?) chooses corporation ([A-Za-z][A-Za-z0-9\s]+?)(?:\s*\||$)', text)
                 if match:
-                    player_name = match.group(1)
+                    player_name = match.group(1).strip()
                     corp_name = match.group(2).strip()
                     corporations[player_name] = corp_name
+                    logger.info(f"Extracted corporation: {player_name} -> {corp_name}")
+                else:
+                    # Fallback pattern for simpler cases
+                    fallback_match = re.search(r'(\w+(?:\s+\w+)*) chooses corporation (\w+)', text)
+                    if fallback_match:
+                        player_name = fallback_match.group(1).strip()
+                        corp_name = fallback_match.group(2).strip()
+                        corporations[player_name] = corp_name
+                        logger.info(f"Extracted corporation (fallback): {player_name} -> {corp_name}")
         
+        logger.info(f"Total corporations extracted: {corporations}")
         return corporations
     
     def _determine_winner(self, players_info: Dict[str, Player]) -> str:
@@ -1109,11 +1159,17 @@ class Parser:
         """Parse a complete game with ELO data from both replay and table HTML"""
         logger.info(f"Starting parsing with ELO data for game {table_id}")
         
+        # Parse ELO data from table HTML first to get player names
+        elo_data = self.parse_elo_data(table_html)
+        logger.info(f"Found ELO data for players: {list(elo_data.keys())}")
+        
         # Parse the main game data from replay HTML
         game_data = self.parse_complete_game(replay_html, table_id)
         
-        # Parse ELO data from table HTML
-        elo_data = self.parse_elo_data(table_html)
+        # If no players were found in replay HTML, create them from ELO data
+        if not game_data.players and elo_data:
+            logger.info("No players found in replay HTML, creating from ELO data")
+            game_data.players = self._create_players_from_elo_data(elo_data, replay_html, table_id)
         
         # Merge ELO data into player information
         self._merge_elo_with_players(game_data.players, elo_data)
@@ -1411,6 +1467,62 @@ class Parser:
             logger.error(f"Error in raw pattern ELO parsing: {e}")
             return {}
     
+    def _create_players_from_elo_data(self, elo_data: Dict[str, EloData], replay_html: str, table_id: str) -> Dict[str, Player]:
+        """Create player objects from ELO data when replay HTML doesn't contain player info"""
+        logger.info(f"Creating players from ELO data for {len(elo_data)} players")
+        
+        players = {}
+        soup = BeautifulSoup(replay_html, 'html.parser')
+        
+        # Get VP data for final scores
+        vp_data = self._extract_vp_data_from_html(replay_html)
+        
+        # Get corporations from replay HTML
+        corporations = self._extract_corporations(soup)
+        
+        for i, (player_name, elo_info) in enumerate(elo_data.items()):
+            # Create a player ID - try to find from VP data or use fallback
+            player_id = None
+            
+            # Try to find player ID from VP data
+            for vp_player_id, vp_player_data in vp_data.items():
+                # This is a simple heuristic - could be improved
+                if len(vp_data) == len(elo_data):
+                    # If we have the same number of players in both, map by order
+                    player_ids = sorted(vp_data.keys())
+                    if i < len(player_ids):
+                        player_id = player_ids[i]
+                        break
+            
+            if not player_id:
+                player_id = f"player_{i}"
+            
+            # Get final VP and breakdown
+            final_vp = 0
+            vp_breakdown = {}
+            if player_id in vp_data:
+                final_vp = vp_data[player_id].get('total', 0)
+                vp_breakdown = vp_data[player_id].get('total_details', {})
+            
+            # Create player object
+            player = Player(
+                player_id=player_id,
+                player_name=player_name,
+                corporation=corporations.get(player_name, 'Unknown'),
+                final_vp=final_vp,
+                final_tr=vp_breakdown.get('tr', 20),
+                vp_breakdown=vp_breakdown,
+                cards_played=[],  # Will be populated from moves
+                milestones_claimed=[],  # Will be populated from moves
+                awards_funded=[],  # Will be populated from moves
+                elo_data=elo_info
+            )
+            
+            players[player_id] = player
+            logger.info(f"Created player {player_name} with ID {player_id}")
+        
+        return players
+
     def _merge_elo_with_players(self, players: Dict[str, Player], elo_data: Dict[str, EloData]):
         """Merge ELO data into player objects"""
         logger.info(f"Merging ELO data for {len(elo_data)} players")

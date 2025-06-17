@@ -3,7 +3,7 @@
 
 # Test table IDs for initial development
 TEST_TABLE_IDS = [
-    "688769496"  # Extracted from original replay URL
+    "688771617"  # Extracted from original replay URL
 ]
 
 # URL templates for constructing BGA URLs
