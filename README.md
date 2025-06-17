@@ -1,13 +1,14 @@
 # BGA Terraforming Mars Scraper
 
-A comprehensive Python tool for scraping and parsing Terraforming Mars game replays from BoardGameArena.
+A comprehensive Python tool for scraping and parsing Terraforming Mars game replays from BoardGameArena with ELO tracking.
 
 ## Features
 
-- **Web scraping**: Automated data collection from BoardGameArena replays
+- **Enhanced Web scraping**: Automated data collection from both replay and table pages
+- **ELO Data Extraction**: Arena points, game rank, and rating changes for each player
 - **Comprehensive parsing**: Complete game state reconstruction with move-by-move analysis
 - **Rich data extraction**: Players, corporations, cards, resources, terraforming parameters
-- **Multiple output formats**: JSON export with structured game data
+- **Multiple output formats**: JSON export with structured game data including ELO information
 - **Game state tracking**: Full game progression from start to finish
 
 ## Quick Start
@@ -32,7 +33,9 @@ cp config.example.py config.py
 
 Edit `config.py` and update:
 - `CHROMEDRIVER_PATH`: Path to your ChromeDriver executable
-- `TARGET_URL`: BGA replay URL you want to scrape
+- `TEST_TABLE_IDS`: List of table IDs to scrape (e.g., ["688769496"])
+
+The scraper now works with table IDs instead of full replay URLs for enhanced functionality.
 
 ### 4. Run the Scraper
 
@@ -62,6 +65,21 @@ bga-tm-scraper/
 ├── config.py               # Configuration settings
 └── requirements.txt        # Python dependencies
 ```
+
+## ELO Data Extraction
+
+The enhanced scraper now extracts ELO information from game table pages:
+
+### ELO Data Types
+- **Arena Points**: Current season-specific ranking points
+- **Arena Points Change**: Gain/loss from the specific game
+- **Game Rank**: Overall ELO rating for the game
+- **Game Rank Change**: ELO rating change from the game
+
+### How It Works
+1. Scraper fetches both table page (`/table?table=ID`) and replay page
+2. Parser extracts ELO data from table page HTML structure
+3. ELO information is merged with player data in the final JSON
 
 ## Parser Features
 
@@ -100,7 +118,13 @@ The parser generates comprehensive JSON with:
       "final_vp": 104,
       "cards_played": ["Great Aquifer", "Nuclear Power", ...],
       "milestones_claimed": ["Gardener", "Terraformer", "Builder"],
-      "awards_funded": ["Landlord"]
+      "awards_funded": ["Landlord"],
+      "elo_data": {
+        "arena_points": 1754,
+        "arena_points_change": 24,
+        "game_rank": 453,
+        "game_rank_change": -5
+      }
     }
   },
   "moves": [

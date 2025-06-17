@@ -4,6 +4,7 @@ Web scraper for Terraforming Mars replay data from BoardGameArena
 import time
 import os
 import logging
+import re
 from typing import List, Optional, Dict
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -87,6 +88,204 @@ class TMScraper:
             print("⚠️  Could not verify login, but continuing anyway...")
             return True
     
+    def scrape_table_and_replay(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Scrape both table page and replay page for a game
+        
+        Args:
+            table_id: BGA table ID
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Combined scraped data or None if failed
+        """
+        if not self.driver:
+            raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        logger.info(f"Scraping table and replay for game {table_id}")
+        
+        try:
+            # Step 1: Scrape table page for ELO data
+            logger.info("Scraping table page...")
+            table_data = self.scrape_table_page(table_id, save_raw, raw_data_dir)
+            if not table_data:
+                logger.error(f"Failed to scrape table page for {table_id}")
+                return None
+
+            # Step 2: Extract player IDs from table page
+            logger.info("Extracting player IDs...")
+            player_ids = self.extract_player_ids_from_table(table_data['html_content'])
+            if not player_ids:
+                logger.warning(f"No player IDs found in table page for {table_id}")
+                # Use a default player ID or continue without it
+                player_ids = ["86296239"]  # Fallback from original URL
+            
+            # Step 3: Construct and scrape replay page
+            logger.info("Extracting replay...")
+            replay_data = self.scrape_replay_from_table(table_id, player_ids[0], save_raw, raw_data_dir)
+            if not replay_data:
+                logger.error(f"Failed to scrape replay page for {table_id}")
+                # Continue with just table data
+                replay_data = {}
+            
+            # Step 4: Combine results
+            combined_data = {
+                'table_id': table_id,
+                'table_data': table_data,
+                'replay_data': replay_data,
+                'scraped_at': datetime.now().isoformat(),
+                'success': True
+            }
+            
+            logger.info(f"Successfully scraped table and replay for game {table_id}")
+            return combined_data
+            
+        except Exception as e:
+            logger.error(f"Error scraping table and replay for {table_id}: {e}")
+            return None
+    
+    def scrape_table_page(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Scrape a table page for ELO information
+        
+        Args:
+            table_id: BGA table ID
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Table page data or None if failed
+        """
+        from config import TABLE_URL_TEMPLATE
+        
+        table_url = TABLE_URL_TEMPLATE.format(table_id=table_id)
+        logger.info(f"Scraping table page: {table_url}")
+        
+        try:
+            # Navigate to the table URL
+            print(f"Navigating to table page: {table_url}")
+            self.driver.get(table_url)
+            time.sleep(5)  # Wait for page to load
+            
+            # Check if we got an error page
+            page_source = self.driver.page_source
+            if 'must be logged' in page_source.lower():
+                print("❌ Authentication error - please make sure you're logged into BGA")
+                return None
+            
+            if 'fatal error' in page_source.lower():
+                print("❌ Fatal error on page - table might not be accessible")
+                return None
+            
+            # Save raw HTML if requested
+            if save_raw:
+                os.makedirs(raw_data_dir, exist_ok=True)
+                raw_file_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
+                
+                with open(raw_file_path, 'w', encoding='utf-8') as f:
+                    f.write(page_source)
+                logger.info(f"Saved table HTML to {raw_file_path}")
+            
+            # Parse basic table information
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            table_data = {
+                'table_id': table_id,
+                'url': table_url,
+                'scraped_at': datetime.now().isoformat(),
+                'html_length': len(page_source),
+                'html_content': page_source,
+                'players_found': [],
+                'elo_data_found': False
+            }
+            
+            # Look for player information and ELO data
+            player_elements = soup.find_all('span', class_='playername')
+            for player_elem in player_elements:
+                player_name = player_elem.get_text().strip()
+                if player_name:
+                    table_data['players_found'].append(player_name)
+            
+            # Check if ELO data is present
+            if 'rankdetails' in page_source or 'winpoints' in page_source:
+                table_data['elo_data_found'] = True
+                logger.info(f"ELO data found in table page for {table_id}")
+                print(f"✅ ELO data found in table page")
+            else:
+                logger.warning(f"No ELO data found in table page for {table_id}")
+                print("⚠️  No ELO data found in table page")
+            
+            logger.info(f"Successfully scraped table page for {table_id}")
+            return table_data
+            
+        except Exception as e:
+            logger.error(f"Error scraping table page for {table_id}: {e}")
+            print(f"❌ Error scraping table page: {e}")
+            return None
+    
+    def extract_player_ids_from_table(self, html_content: str) -> List[str]:
+        """
+        Extract player IDs from table page HTML
+        
+        Args:
+            html_content: HTML content of the table page
+            
+        Returns:
+            list: List of player IDs found
+        """
+        player_ids = []
+        
+        try:
+            # Look for player ID patterns in the HTML
+            # BGA player IDs are typically 8+ digit numbers
+            player_id_patterns = [
+                r'player[^>]*?(\d{8,})',
+                r'(\d{8,})[^>]*?player',
+                r'playername[^>]*?(\d{8,})',
+                r'(\d{8,})[^>]*?playername',
+            ]
+            
+            for pattern in player_id_patterns:
+                matches = re.findall(pattern, html_content, re.IGNORECASE)
+                for match in matches:
+                    if len(match) >= 8 and match not in player_ids:
+                        player_ids.append(match)
+            
+            # Remove duplicates while preserving order
+            unique_player_ids = []
+            for pid in player_ids:
+                if pid not in unique_player_ids:
+                    unique_player_ids.append(pid)
+            
+            logger.info(f"Extracted {len(unique_player_ids)} player IDs from table page")
+            return unique_player_ids
+            
+        except Exception as e:
+            logger.error(f"Error extracting player IDs: {e}")
+            return []
+    
+    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Scrape replay page using table ID and player ID
+        
+        Args:
+            table_id: BGA table ID
+            player_id: Player ID for replay URL construction
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Replay data or None if failed
+        """
+        from config import REPLAY_URL_TEMPLATE
+        
+        replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
+        logger.info(f"Scraping replay page: {replay_url}")
+        
+        # Use existing scrape_replay method with constructed URL
+        return self.scrape_replay(replay_url, save_raw, raw_data_dir)
+
     def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
         Scrape a single replay page
@@ -185,10 +384,43 @@ class TMScraper:
             print(f"❌ Error scraping replay: {e}")
             return None
     
+    def scrape_multiple_tables_and_replays(self, table_ids: List[str], save_raw: bool = True, 
+                                         raw_data_dir: str = 'data/raw') -> List[Dict]:
+        """
+        Scrape multiple table and replay pages
+        
+        Args:
+            table_ids: List of BGA table IDs
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            list: List of scraped data dictionaries
+        """
+        results = []
+        
+        logger.info(f"Starting batch scraping of {len(table_ids)} games (table + replay)")
+        
+        for i, table_id in enumerate(table_ids, 1):
+            logger.info(f"Processing game {i}/{len(table_ids)} (table ID: {table_id})")
+            print(f"\nProcessing game {i}/{len(table_ids)} (table ID: {table_id})")
+            
+            result = self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            if result:
+                results.append(result)
+            
+            # Delay between requests (except for the last one)
+            if i < len(table_ids):
+                print(f"Waiting {self.request_delay} seconds...")
+                time.sleep(self.request_delay)
+        
+        logger.info(f"Batch scraping completed. Successfully scraped {len(results)}/{len(table_ids)} games")
+        return results
+
     def scrape_multiple_replays(self, urls: List[str], save_raw: bool = True, 
                               raw_data_dir: str = 'data/raw') -> List[Dict]:
         """
-        Scrape multiple replay pages
+        Scrape multiple replay pages (legacy method)
         
         Args:
             urls: List of BGA replay URLs

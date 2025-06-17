@@ -1,7 +1,16 @@
 # BoardGameArena Configuration
 # Copy this file to config.py and update with your values
 
-# Test URLs for initial development
+# Test table IDs for initial development
+TEST_TABLE_IDS = [
+    "688769496"  # Extracted from original replay URL
+]
+
+# URL templates for constructing BGA URLs
+TABLE_URL_TEMPLATE = "https://boardgamearena.com/table?table={table_id}"
+REPLAY_URL_TEMPLATE = "https://boardgamearena.com/archive/replay/250604-1037/?table={table_id}&player={player_id}&comments={player_id}"
+
+# Legacy URLs (for migration reference)
 TEST_URLS = [
     "https://boardgamearena.com/archive/replay/250604-1037/?table=688769496&player=86296239&comments=86296239;"
 ]
