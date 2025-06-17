@@ -549,7 +549,7 @@ class Parser:
                 player.awards_funded.append(award_match.group(1))
     
     def _build_game_states(self, moves: List[Move], vp_progression: List[Dict[str, Any]], players_info: Dict[str, Player]) -> List[Move]:
-        """Build game states for each move"""
+        """Build game states for each move with enhanced VP, milestone, and award tracking"""
         # Initialize tracking variables
         current_temp = -30
         current_oxygen = 0
@@ -561,6 +561,17 @@ class Parser:
                           for pid in players_info.keys()}
         player_production = {pid: {'M€': 0, 'Steel': 0, 'Titanium': 0, 'Plant': 0, 'Energy': 0, 'Heat': 0} 
                            for pid in players_info.keys()}
+        
+        # Track milestones and awards state throughout the game
+        current_milestones = {}
+        current_awards = {}
+        
+        # Create a mapping from VP progression to moves for better alignment
+        vp_by_move_id = {}
+        for vp_entry in vp_progression:
+            move_id = vp_entry.get('move_id')
+            if move_id:
+                vp_by_move_id[move_id] = vp_entry
         
         # Process each move and build game state
         for i, move in enumerate(moves):
@@ -586,11 +597,45 @@ class Parser:
                 for resource, change in move.production_changes.items():
                     player_production[move.player_id][resource] = player_production[move.player_id].get(resource, 0) + change
             
-            # Get VP data for this move
+            # Update milestone and award tracking
+            if move.action_type == 'claim_milestone':
+                milestone_match = re.search(r'claims milestone (\w+)', move.description)
+                if milestone_match:
+                    milestone_name = milestone_match.group(1)
+                    current_milestones[milestone_name] = {
+                        'claimed_by': move.player_name,
+                        'player_id': move.player_id,
+                        'move_number': move.move_number,
+                        'timestamp': move.timestamp
+                    }
+            
+            if move.action_type == 'fund_award':
+                award_match = re.search(r'funds (\w+) award', move.description)
+                if award_match:
+                    award_name = award_match.group(1)
+                    current_awards[award_name] = {
+                        'funded_by': move.player_name,
+                        'player_id': move.player_id,
+                        'move_number': move.move_number,
+                        'timestamp': move.timestamp
+                    }
+            
+            # Get VP data for this move - try multiple approaches
             move_vp_data = {}
+            
+            # First, try to match by move number or index
             if i < len(vp_progression):
                 vp_entry = vp_progression[i]
                 move_vp_data = vp_entry.get('vp_data', {})
+            
+            # Alternative: try to find VP data that matches this move's timing
+            # This is more complex but could provide better accuracy
+            if not move_vp_data and vp_progression:
+                # Find the closest VP entry by index
+                closest_index = min(i, len(vp_progression) - 1)
+                if closest_index >= 0:
+                    vp_entry = vp_progression[closest_index]
+                    move_vp_data = vp_entry.get('vp_data', {})
             
             # Create game state
             game_state = GameState(
@@ -602,17 +647,284 @@ class Parser:
                 player_resources=dict(player_resources),
                 player_production=dict(player_production),
                 player_vp=move_vp_data,
-                milestones={},  # Could be enhanced to track milestone states
-                awards={}  # Could be enhanced to track award states
+                milestones=dict(current_milestones),
+                awards=dict(current_awards)
             )
             
             move.game_state = game_state
         
         return moves
     
+    def _extract_card_names(self, html_content: str) -> Dict[str, str]:
+        """Extract card ID to name mappings from HTML"""
+        card_names = {}
+        
+        try:
+            # Pattern to match card elements with data-name attributes
+            pattern = r'<div[^>]+id="(card_[^"]+)"[^>]+data-name="([^"]+)"'
+            matches = re.findall(pattern, html_content)
+            
+            for card_id, card_name in matches:
+                # Clean up the card ID (remove _help suffix if present)
+                clean_id = card_id.replace('_help', '')
+                card_names[clean_id] = card_name
+            
+            logger.info(f"Extracted {len(card_names)} card name mappings")
+            return card_names
+            
+        except Exception as e:
+            logger.error(f"Error extracting card names: {e}")
+            return {}
+    
+    def _extract_milestone_names(self, html_content: str) -> Dict[str, str]:
+        """Extract milestone ID to name mappings from HTML"""
+        milestone_names = {}
+        
+        try:
+            # Pattern to match milestone elements with data-name attributes
+            pattern = r'<div[^>]+id="(milestone_\d+)"[^>]+data-name="([^"]+)"'
+            matches = re.findall(pattern, html_content)
+            
+            for milestone_id, milestone_name in matches:
+                milestone_names[milestone_id] = milestone_name
+            
+            logger.info(f"Extracted {len(milestone_names)} milestone name mappings")
+            return milestone_names
+            
+        except Exception as e:
+            logger.error(f"Error extracting milestone names: {e}")
+            return {}
+    
+    def _extract_award_names(self, html_content: str) -> Dict[str, str]:
+        """Extract award ID to name mappings from HTML"""
+        award_names = {}
+        
+        try:
+            # Pattern to match award elements with data-name attributes
+            pattern = r'<div[^>]+id="(award_\d+)"[^>]+data-name="([^"]+)"'
+            matches = re.findall(pattern, html_content)
+            
+            for award_id, award_name in matches:
+                award_names[award_id] = award_name
+            
+            logger.info(f"Extracted {len(award_names)} award name mappings")
+            return award_names
+            
+        except Exception as e:
+            logger.error(f"Error extracting award names: {e}")
+            return {}
+
+    def _extract_g_gamelogs(self, html_content: str) -> Dict[str, Any]:
+        """Extract g_gamelogs JSON structure from HTML"""
+        try:
+            # Find the g_gamelogs variable in the HTML
+            pattern = r'g_gamelogs\s*=\s*(\{.*?\});'
+            match = re.search(pattern, html_content, re.DOTALL)
+            
+            if not match:
+                logger.warning("g_gamelogs not found in HTML")
+                return {}
+            
+            gamelogs_json = match.group(1)
+            
+            # Parse the JSON
+            gamelogs = json.loads(gamelogs_json)
+            logger.info(f"Successfully extracted g_gamelogs with {len(gamelogs.get('data', {}).get('data', []))} entries")
+            
+            return gamelogs
+            
+        except (json.JSONDecodeError, AttributeError) as e:
+            logger.error(f"Error extracting g_gamelogs: {e}")
+            return {}
+    
+    def _replace_ids_with_names(self, vp_data: Dict[str, Any], card_names: Dict[str, str], 
+                               milestone_names: Dict[str, str], award_names: Dict[str, str]) -> Dict[str, Any]:
+        """Replace ID references with actual names in VP data"""
+        if not isinstance(vp_data, dict):
+            return vp_data
+        
+        updated_data = {}
+        
+        for player_id, player_vp in vp_data.items():
+            if not isinstance(player_vp, dict):
+                updated_data[player_id] = player_vp
+                continue
+            
+            updated_player_vp = dict(player_vp)
+            
+            # Process the details section
+            if 'details' in updated_player_vp and isinstance(updated_player_vp['details'], dict):
+                details = updated_player_vp['details']
+                updated_details = {}
+                
+                for category, items in details.items():
+                    if not isinstance(items, dict):
+                        updated_details[category] = items
+                        continue
+                    
+                    updated_items = {}
+                    
+                    for item_id, item_data in items.items():
+                        # Determine the actual name based on category and ID
+                        actual_name = item_id  # Default to original ID
+                        
+                        if category == 'cards' and item_id in card_names:
+                            actual_name = card_names[item_id]
+                        elif category == 'milestones' and item_id in milestone_names:
+                            actual_name = milestone_names[item_id]
+                        elif category == 'awards' and item_id in award_names:
+                            actual_name = award_names[item_id]
+                        
+                        updated_items[actual_name] = item_data
+                    
+                    updated_details[category] = updated_items
+                
+                updated_player_vp['details'] = updated_details
+            
+            updated_data[player_id] = updated_player_vp
+        
+        return updated_data
+
+    def _parse_scoring_data_from_gamelogs(self, gamelogs: Dict[str, Any], card_names: Dict[str, str], 
+                                        milestone_names: Dict[str, str], award_names: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Parse scoring data from g_gamelogs entries and replace IDs with names"""
+        scoring_entries = []
+        
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                # Look for data array within each entry
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    # Look for scoringTable type entries
+                    if data_item.get('type') == 'scoringTable':
+                        scoring_data = data_item.get('args', {}).get('data', {})
+                        if scoring_data:
+                            # Replace IDs with names in the scoring data
+                            scoring_data_with_names = self._replace_ids_with_names(
+                                scoring_data, card_names, milestone_names, award_names
+                            )
+                            
+                            scoring_entry = {
+                                'move_id': entry.get('move_id'),
+                                'time': entry.get('time'),
+                                'uid': data_item.get('uid'),
+                                'scoring_data': scoring_data_with_names
+                            }
+                            scoring_entries.append(scoring_entry)
+                            logger.info(f"Found scoring data for move {entry.get('move_id')} with {len(scoring_data)} players")
+            
+            logger.info(f"Extracted {len(scoring_entries)} scoring entries from g_gamelogs")
+            return scoring_entries
+            
+        except Exception as e:
+            logger.error(f"Error parsing scoring data from g_gamelogs: {e}")
+            return []
+    
+    def _parse_milestone_award_data(self, gamelogs: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Parse milestone and award data from g_gamelogs"""
+        milestones_data = {}
+        awards_data = {}
+        
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    # Look for milestone claims
+                    log_message = data_item.get('log', '')
+                    if 'milestone' in log_message.lower():
+                        args = data_item.get('args', {})
+                        if 'player_name' in args:
+                            milestone_info = {
+                                'move_id': entry.get('move_id'),
+                                'time': entry.get('time'),
+                                'player_id': args.get('player_id'),
+                                'player_name': args.get('player_name'),
+                                'uid': data_item.get('uid')
+                            }
+                            milestone_key = f"milestone_{data_item.get('uid', 'unknown')}"
+                            milestones_data[milestone_key] = milestone_info
+                    
+                    # Look for award funding
+                    if 'award' in log_message.lower() and 'fund' in log_message.lower():
+                        args = data_item.get('args', {})
+                        if 'player_name' in args:
+                            award_info = {
+                                'move_id': entry.get('move_id'),
+                                'time': entry.get('time'),
+                                'player_id': args.get('player_id'),
+                                'player_name': args.get('player_name'),
+                                'uid': data_item.get('uid')
+                            }
+                            award_key = f"award_{data_item.get('uid', 'unknown')}"
+                            awards_data[award_key] = award_info
+            
+            logger.info(f"Extracted {len(milestones_data)} milestone entries and {len(awards_data)} award entries")
+            return milestones_data, awards_data
+            
+        except Exception as e:
+            logger.error(f"Error parsing milestone/award data: {e}")
+            return {}, {}
+    
     def _extract_vp_progression(self, html_content: str) -> List[Dict[str, Any]]:
-        """Extract VP progression throughout the game"""
-        # Use the same pattern as the existing VP progression extraction
+        """Extract VP progression throughout the game using g_gamelogs data"""
+        # Extract g_gamelogs first
+        gamelogs = self._extract_g_gamelogs(html_content)
+        if not gamelogs:
+            # Fallback to old method if g_gamelogs not found
+            return self._extract_vp_progression_fallback(html_content)
+        
+        # Extract name mappings from HTML
+        card_names = self._extract_card_names(html_content)
+        milestone_names = self._extract_milestone_names(html_content)
+        award_names = self._extract_award_names(html_content)
+        
+        # Parse scoring data from g_gamelogs with name replacement
+        scoring_entries = self._parse_scoring_data_from_gamelogs(gamelogs, card_names, milestone_names, award_names)
+        
+        vp_progression = []
+        for i, entry in enumerate(scoring_entries):
+            scoring_data = entry['scoring_data']
+            
+            # Calculate combined total
+            combined_total = sum(data.get('total', 0) for data in scoring_data.values())
+            
+            vp_entry = {
+                'move_index': i,
+                'move_id': entry.get('move_id'),
+                'time': entry.get('time'),
+                'combined_total': combined_total,
+                'vp_data': scoring_data
+            }
+            
+            vp_progression.append(vp_entry)
+        
+        logger.info(f"Extracted VP progression with {len(vp_progression)} entries")
+        return vp_progression
+    
+    def _extract_vp_progression_fallback(self, html_content: str) -> List[Dict[str, Any]]:
+        """Fallback VP progression extraction using the old regex method"""
         pattern = r'"data":\{((?:"(\d+)":\{[^}]*"total":(\d+)[^}]*\}[,\s]*)+)\}'
         
         matches = re.findall(pattern, html_content, re.DOTALL)
