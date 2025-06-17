@@ -50,6 +50,15 @@ def main():
         print("❌ No player ID provided!")
         return
     
+    # Ask about Arena season 21 filtering
+    filter_choice = input("Filter for Arena season 21 games only (2025-04-08 to 2025-07-08)? (y/n): ").strip().lower()
+    filter_arena_season_21 = filter_choice == 'y'
+    
+    if filter_arena_season_21:
+        print("🎯 Arena season 21 filtering enabled - only games from 2025-04-08 to 2025-07-08 will be included")
+    else:
+        print("📅 No date filtering - all games will be included")
+    
     # Initialize scraper
     scraper = TMScraper(
         chromedriver_path=CHROMEDRIVER_PATH,
@@ -68,33 +77,38 @@ def main():
         # Manual login
         scraper.login_to_bga()
         
-        # Scrape player game history (Arena mode filtering happens during individual game scraping)
+        # Scrape player game history with datetime information
         print(f"\n🎯 Starting to scrape game history for player {player_id}...")
-        print("Note: Only Arena mode games will be processed during scraping.")
-        table_ids = scraper.scrape_player_game_history(
+        print("Note: Extracting table IDs and datetimes. Only Arena mode games will be processed during scraping.")
+        games_data = scraper.scrape_player_game_history(
             player_id=player_id,
             max_clicks=50,  # Reasonable limit
-            click_delay=1   # 1 second between clicks
+            click_delay=1,  # 1 second between clicks
+            filter_arena_season_21=filter_arena_season_21
         )
         
-        if table_ids:
-            print(f"\n✅ Successfully found {len(table_ids)} games!")
-            print("Table IDs found:")
-            for i, table_id in enumerate(table_ids[:10], 1):  # Show first 10
-                print(f"  {i}. {table_id}")
+        if games_data:
+            print(f"\n✅ Successfully found {len(games_data)} games with datetime information!")
+            print("Games found (showing first 10):")
+            for i, game in enumerate(games_data[:10], 1):
+                print(f"  {i}. Table ID: {game['table_id']}")
+                print(f"     Date: {game['raw_datetime']} ({game['date_type']})")
+                if game['parsed_datetime']:
+                    print(f"     Parsed: {game['parsed_datetime']}")
+                print()
             
-            if len(table_ids) > 10:
-                print(f"  ... and {len(table_ids) - 10} more")
+            if len(games_data) > 10:
+                print(f"  ... and {len(games_data) - 10} more games")
             
             # Save results to file
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            results_file = f"data/processed/player_{player_id}_table_ids_{timestamp}.json"
+            results_file = f"data/processed/player_{player_id}_games_with_datetimes_{timestamp}.json"
             
             results_data = {
                 'player_id': player_id,
                 'scraped_at': datetime.now().isoformat(),
-                'total_games_found': len(table_ids),
-                'table_ids': table_ids
+                'total_games_found': len(games_data),
+                'games_data': games_data
             }
             
             with open(results_file, 'w', encoding='utf-8') as f:
@@ -107,7 +121,8 @@ def main():
             
             if scrape_games == 'y':
                 print("\n🚀 Starting to scrape and parse first 10 games...")
-                sample_table_ids = table_ids[:10]
+                sample_games = games_data[:10]
+                sample_table_ids = [game['table_id'] for game in sample_games]
                 
                 # Initialize parser
                 from src.parser import Parser
@@ -238,10 +253,11 @@ def main():
                 scraping_summary = {
                     'player_id': player_id,
                     'scraped_at': datetime.now().isoformat(),
-                    'total_table_ids_found': len(table_ids),
+                    'total_games_found': len(games_data),
                     'games_scraped': len(sample_table_ids),
                     'successful_scrapes': len(scraping_results),
                     'successful_parses': len([r for r in parsing_results if r['success']]),
+                    'games_data': sample_games,  # Include datetime info for processed games
                     'scraping_results': clean_scraping_results,
                     'parsing_results': parsing_results
                 }
@@ -253,7 +269,7 @@ def main():
                 
                 # Print detailed summary
                 print(f"\n=== Complete Processing Summary ===")
-                print(f"Total table IDs found: {len(table_ids)}")
+                print(f"Total games found: {len(games_data)}")
                 print(f"Games scraped: {len(scraping_results)}")
                 print(f"Games parsed: {len([r for r in parsing_results if r['success']])}")
                 print(f"Games with ELO data: {len([r for r in parsing_results if r.get('elo_data_included', False)])}")

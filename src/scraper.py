@@ -5,7 +5,7 @@ import time
 import os
 import logging
 import re
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -13,9 +13,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# Arena Season 21 date range constants
+ARENA_SEASON_21_START = datetime(2025, 4, 8)
+ARENA_SEASON_21_END = datetime(2025, 7, 8, 23, 59, 59)  # End of day
 
 class TMScraper:
     """Web scraper for Terraforming Mars replays from BoardGameArena"""
@@ -461,17 +465,18 @@ class TMScraper:
             return None
     
     def scrape_player_game_history(self, player_id: str, max_clicks: int = 100, 
-                                 click_delay: int = 1) -> List[str]:
+                                 click_delay: int = 1, filter_arena_season_21: bool = False) -> List[Dict]:
         """
-        Scrape all table IDs from a player's game history by auto-clicking "See more"
+        Scrape all table IDs and datetimes from a player's game history by auto-clicking "See more"
         
         Args:
             player_id: BGA player ID
             max_clicks: Maximum number of "See more" clicks to prevent infinite loops
             click_delay: Delay between clicks in seconds
+            filter_arena_season_21: If True, only return games from Arena season 21 date range (2025-04-08 to 2025-07-08)
             
         Returns:
-            list: List of table IDs found in the player's game history
+            list: List of dictionaries containing table_id, raw_datetime, parsed_datetime, and date_type
         """
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
@@ -628,14 +633,30 @@ class TMScraper:
             if click_count >= max_clicks:
                 print(f"⚠️  Reached maximum click limit ({max_clicks}). Some games might not be loaded.")
             
-            # Extract table IDs from the fully loaded page
-            print("Extracting table IDs from loaded page...")
+            # Extract table IDs and datetimes from the fully loaded page
+            print("Extracting table IDs and datetimes from loaded page...")
             page_source = self.driver.page_source
-            table_ids = self._extract_table_ids_from_history(page_source)
-            logger.info(f"Successfully extracted {len(table_ids)} table IDs from player {player_id}")
-            print(f"✅ Found {len(table_ids)} table IDs for player {player_id}")
+            game_data = self._extract_games_with_datetimes_from_history(page_source)
             
-            return table_ids
+            # Apply Arena season 21 filtering if requested
+            if filter_arena_season_21:
+                original_count = len(game_data)
+                filtered_games = []
+                
+                for game in game_data:
+                    if self._is_game_in_arena_season_21_date_range(game['parsed_datetime']):
+                        filtered_games.append(game)
+                
+                game_data = filtered_games
+                filtered_count = len(game_data)
+                
+                logger.info(f"Arena season 21 filtering: {filtered_count}/{original_count} games within date range")
+                print(f"🎯 Arena season 21 filtering: {filtered_count}/{original_count} games within date range (2025-04-08 to 2025-07-08)")
+            
+            logger.info(f"Successfully extracted {len(game_data)} games with datetimes from player {player_id}")
+            print(f"✅ Found {len(game_data)} games with datetimes for player {player_id}")
+            
+            return game_data
             
         except Exception as e:
             logger.error(f"Error scraping player game history for {player_id}: {e}")
@@ -691,7 +712,255 @@ class TMScraper:
             logger.error(f"Error extracting table IDs from history: {e}")
             return []
 
-    def scrape_multiple_tables_and_replays(self, table_ids: List[str], save_raw: bool = True, 
+    def _extract_games_with_datetimes_from_history(self, html_content: str) -> List[Dict]:
+        """
+        Extract table IDs and datetimes from player game history HTML
+        
+        Args:
+            html_content: HTML content of the player history page
+            
+        Returns:
+            list: List of dictionaries containing table_id, raw_datetime, parsed_datetime, and date_type
+        """
+        games_data = []
+        
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Look for game rows - each row should contain both table ID and datetime
+            game_rows = soup.find_all('tr')  # Table rows
+            if not game_rows:
+                # Fallback: look for div rows
+                game_rows = soup.find_all('div', class_='row')
+            
+            logger.info(f"Found {len(game_rows)} potential game rows")
+            
+            for row in game_rows:
+                try:
+                    # Extract table ID from this row
+                    table_id_match = re.search(r'#(\d{8,})', str(row))
+                    if not table_id_match:
+                        continue
+                    
+                    table_id = table_id_match.group(1)
+                    
+                    # Extract datetime from this row
+                    datetime_info = self._extract_datetime_from_row(row)
+                    if not datetime_info:
+                        # If no datetime found, create a basic entry
+                        datetime_info = {
+                            'raw_datetime': 'unknown',
+                            'parsed_datetime': None,
+                            'date_type': 'unknown'
+                        }
+                    
+                    game_data = {
+                        'table_id': table_id,
+                        'raw_datetime': datetime_info['raw_datetime'],
+                        'parsed_datetime': datetime_info['parsed_datetime'],
+                        'date_type': datetime_info['date_type']
+                    }
+                    
+                    games_data.append(game_data)
+                    logger.debug(f"Extracted game {table_id} with datetime: {datetime_info['raw_datetime']}")
+                    
+                except Exception as e:
+                    logger.debug(f"Error processing game row: {e}")
+                    continue
+            
+            # Remove duplicates while preserving order
+            unique_games = []
+            seen_table_ids = set()
+            for game in games_data:
+                table_id = game['table_id']
+                if table_id not in seen_table_ids and len(table_id) >= 8:
+                    unique_games.append(game)
+                    seen_table_ids.add(table_id)
+            
+            logger.info(f"Extracted {len(unique_games)} unique games with datetimes")
+            return unique_games
+            
+        except Exception as e:
+            logger.error(f"Error extracting games with datetimes from history: {e}")
+            return []
+
+    def _extract_datetime_from_row(self, row) -> Optional[Dict]:
+        """
+        Extract datetime information from a game row
+        
+        Args:
+            row: BeautifulSoup element representing a game row
+            
+        Returns:
+            dict: Dictionary with raw_datetime, parsed_datetime, and date_type, or None if not found
+        """
+        try:
+            # Look for datetime in smalltext elements (common pattern in BGA)
+            smalltext_elements = row.find_all('div', class_='smalltext')
+            
+            for elem in smalltext_elements:
+                text = elem.get_text().strip()
+                datetime_info = self._parse_game_datetime(text)
+                if datetime_info:
+                    return datetime_info
+            
+            # Fallback: look for datetime patterns in any text within the row
+            row_text = row.get_text()
+            datetime_info = self._parse_game_datetime(row_text)
+            if datetime_info:
+                return datetime_info
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Error extracting datetime from row: {e}")
+            return None
+
+    def _is_game_in_arena_season_21_date_range(self, parsed_datetime_str: Optional[str]) -> bool:
+        """
+        Check if a game's datetime falls within Arena season 21 date range (2025-04-08 to 2025-07-08)
+        
+        Args:
+            parsed_datetime_str: ISO format datetime string from game parsing
+            
+        Returns:
+            bool: True if the game is within Arena season 21 date range, False otherwise
+        """
+        if not parsed_datetime_str:
+            logger.debug("No parsed datetime provided - excluding from Arena season 21")
+            return False
+        
+        try:
+            game_datetime = datetime.fromisoformat(parsed_datetime_str)
+            
+            # Check if game falls within Arena season 21 date range
+            is_in_range = ARENA_SEASON_21_START <= game_datetime <= ARENA_SEASON_21_END
+            
+            if is_in_range:
+                logger.debug(f"Game datetime {parsed_datetime_str} is within Arena season 21 range")
+            else:
+                logger.debug(f"Game datetime {parsed_datetime_str} is outside Arena season 21 range")
+            
+            return is_in_range
+            
+        except Exception as e:
+            logger.debug(f"Error parsing datetime {parsed_datetime_str}: {e}")
+            return False
+
+    def _parse_game_datetime(self, text: str) -> Optional[Dict]:
+        """
+        Parse datetime from text, handling both relative and absolute dates
+        
+        Args:
+            text: Text that may contain datetime information
+            
+        Returns:
+            dict: Dictionary with raw_datetime, parsed_datetime, and date_type, or None if not found
+        """
+        try:
+            # Pattern 1: Relative dates like "yesterday at 00:08"
+            relative_pattern = r'(yesterday|today)\s+at\s+(\d{1,2}:\d{2})'
+            relative_match = re.search(relative_pattern, text.lower())
+            
+            if relative_match:
+                relative_word = relative_match.group(1)
+                time_str = relative_match.group(2)
+                
+                # Calculate the actual date
+                current_date = datetime.now()
+                if relative_word == 'yesterday':
+                    target_date = current_date - timedelta(days=1)
+                else:  # today
+                    target_date = current_date
+                
+                # Parse the time
+                time_parts = time_str.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1])
+                
+                # Create the full datetime
+                parsed_datetime = target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                return {
+                    'raw_datetime': f"{relative_word} at {time_str}",
+                    'parsed_datetime': parsed_datetime.isoformat(),
+                    'date_type': 'relative'
+                }
+            
+            # Pattern 2: Absolute dates like "2025-06-15 at 00:29"
+            absolute_pattern = r'(\d{4}-\d{2}-\d{2})\s+at\s+(\d{1,2}:\d{2})'
+            absolute_match = re.search(absolute_pattern, text)
+            
+            if absolute_match:
+                date_str = absolute_match.group(1)
+                time_str = absolute_match.group(2)
+                
+                # Parse the full datetime
+                datetime_str = f"{date_str} {time_str}:00"
+                parsed_datetime = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+                
+                return {
+                    'raw_datetime': f"{date_str} at {time_str}",
+                    'parsed_datetime': parsed_datetime.isoformat(),
+                    'date_type': 'absolute'
+                }
+            
+            # Pattern 3: Alternative absolute format like "15/06/2025 at 00:29"
+            alt_absolute_pattern = r'(\d{1,2}/\d{1,2}/\d{4})\s+at\s+(\d{1,2}:\d{2})'
+            alt_absolute_match = re.search(alt_absolute_pattern, text)
+            
+            if alt_absolute_match:
+                date_str = alt_absolute_match.group(1)
+                time_str = alt_absolute_match.group(2)
+                
+                # Parse the date (assuming DD/MM/YYYY format)
+                date_parts = date_str.split('/')
+                day = int(date_parts[0])
+                month = int(date_parts[1])
+                year = int(date_parts[2])
+                
+                # Parse the time
+                time_parts = time_str.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1])
+                
+                # Create the datetime
+                parsed_datetime = datetime(year, month, day, hour, minute, 0)
+                
+                return {
+                    'raw_datetime': f"{date_str} at {time_str}",
+                    'parsed_datetime': parsed_datetime.isoformat(),
+                    'date_type': 'absolute'
+                }
+            
+            # Pattern 4: Just time like "00:08" (assume today)
+            time_only_pattern = r'\b(\d{1,2}:\d{2})\b'
+            time_only_match = re.search(time_only_pattern, text)
+            
+            if time_only_match:
+                time_str = time_only_match.group(1)
+                
+                # Parse the time and assume today
+                time_parts = time_str.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1])
+                
+                current_date = datetime.now()
+                parsed_datetime = current_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                
+                return {
+                    'raw_datetime': time_str,
+                    'parsed_datetime': parsed_datetime.isoformat(),
+                    'date_type': 'time_only'
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Error parsing datetime from text '{text}': {e}")
+            return None
+
+    def scrape_multiple_tables_and_replays(self, table_ids: List[str], save_raw: bool = True,
                                          raw_data_dir: str = 'data/raw') -> List[Dict]:
         """
         Scrape multiple table and replay pages
