@@ -105,79 +105,101 @@ def main():
             scrape_games = input(f"\nWould you like to scrape the first 5 games? (y/n): ").strip().lower()
             
             if scrape_games == 'y':
-                print("\n🚀 Starting to scrape first 5 games...")
+                print("\n🚀 Starting to scrape and parse first 5 games...")
                 sample_table_ids = table_ids[:5]
                 
-                scraping_results = scraper.scrape_multiple_tables_and_replays(
-                    table_ids=sample_table_ids,
-                    save_raw=True,
-                    raw_data_dir=RAW_DATA_DIR
-                )
-                
-                print(f"\n✅ Successfully scraped {len(scraping_results)}/{len(sample_table_ids)} games")
-                
-                # Parse the scraped games
-                print("\n🔄 Starting to parse scraped games...")
+                # Initialize parser
                 from src.parser import Parser
                 parser = Parser()
                 
+                scraping_results = []
                 parsing_results = []
-                for scraping_result in scraping_results:
-                    table_id = scraping_result['table_id']
-                    print(f"Parsing game {table_id}...")
+                
+                for i, table_id in enumerate(sample_table_ids, 1):
+                    print(f"\n--- Processing game {i}/{len(sample_table_ids)} (table ID: {table_id}) ---")
                     
-                    try:
-                        # Read the HTML files
-                        table_html_path = os.path.join(RAW_DATA_DIR, f"table_{table_id}.html")
-                        replay_html_path = os.path.join(RAW_DATA_DIR, f"replay_{table_id}.html")
+                    # Scrape the game
+                    print(f"Scraping game {table_id}...")
+                    scraping_result = scraper.scrape_table_and_replay(
+                        table_id=table_id,
+                        save_raw=True,
+                        raw_data_dir=RAW_DATA_DIR
+                    )
+                    
+                    if scraping_result:
+                        scraping_results.append(scraping_result)
+                        print(f"✅ Successfully scraped game {table_id}")
                         
-                        if os.path.exists(table_html_path) and os.path.exists(replay_html_path):
-                            with open(table_html_path, 'r', encoding='utf-8') as f:
-                                table_html = f.read()
+                        # Parse immediately after scraping
+                        print(f"Parsing game {table_id}...")
+                        try:
+                            # Read the HTML files
+                            table_html_path = os.path.join(RAW_DATA_DIR, f"table_{table_id}.html")
+                            replay_html_path = os.path.join(RAW_DATA_DIR, f"replay_{table_id}.html")
                             
-                            with open(replay_html_path, 'r', encoding='utf-8') as f:
-                                replay_html = f.read()
-                            
-                            # Parse with ELO data
-                            game_data = parser.parse_complete_game_with_elo(
-                                replay_html=replay_html,
-                                table_html=table_html,
-                                table_id=table_id
-                            )
-                            
-                            # Export to JSON
-                            output_path = f"data/parsed/game_{table_id}.json"
-                            parser.export_to_json(game_data, output_path)
-                            
-                            parsing_results.append({
-                                'table_id': table_id,
-                                'success': True,
-                                'output_file': output_path,
-                                'players_count': len(game_data.players),
-                                'moves_count': len(game_data.moves),
-                                'elo_data_included': game_data.metadata.get('elo_data_included', False),
-                                'elo_players_found': game_data.metadata.get('elo_players_found', 0)
-                            })
-                            
-                            print(f"✅ Successfully parsed and saved game {table_id}")
-                            
-                        else:
-                            print(f"❌ Missing HTML files for game {table_id}")
+                            if os.path.exists(table_html_path) and os.path.exists(replay_html_path):
+                                with open(table_html_path, 'r', encoding='utf-8') as f:
+                                    table_html = f.read()
+                                
+                                with open(replay_html_path, 'r', encoding='utf-8') as f:
+                                    replay_html = f.read()
+                                
+                                # Parse with ELO data
+                                game_data = parser.parse_complete_game_with_elo(
+                                    replay_html=replay_html,
+                                    table_html=table_html,
+                                    table_id=table_id
+                                )
+                                
+                                # Export to JSON
+                                output_path = f"data/parsed/game_{table_id}.json"
+                                parser.export_to_json(game_data, output_path)
+                                
+                                parsing_results.append({
+                                    'table_id': table_id,
+                                    'success': True,
+                                    'output_file': output_path,
+                                    'players_count': len(game_data.players),
+                                    'moves_count': len(game_data.moves),
+                                    'elo_data_included': game_data.metadata.get('elo_data_included', False),
+                                    'elo_players_found': game_data.metadata.get('elo_players_found', 0)
+                                })
+                                
+                                print(f"✅ Successfully parsed and saved game {table_id}")
+                                print(f"   Players: {len(game_data.players)}, Moves: {len(game_data.moves)}, ELO: {'✅' if game_data.metadata.get('elo_data_included', False) else '❌'}")
+                                
+                            else:
+                                print(f"❌ Missing HTML files for game {table_id}")
+                                parsing_results.append({
+                                    'table_id': table_id,
+                                    'success': False,
+                                    'error': 'Missing HTML files'
+                                })
+                                
+                        except Exception as e:
+                            print(f"❌ Error parsing game {table_id}: {e}")
                             parsing_results.append({
                                 'table_id': table_id,
                                 'success': False,
-                                'error': 'Missing HTML files'
+                                'error': str(e)
                             })
-                            
-                    except Exception as e:
-                        print(f"❌ Error parsing game {table_id}: {e}")
+                    else:
+                        print(f"❌ Failed to scrape game {table_id}")
                         parsing_results.append({
                             'table_id': table_id,
                             'success': False,
-                            'error': str(e)
+                            'error': 'Scraping failed'
                         })
+                    
+                    # Add delay between games (except for the last one)
+                    if i < len(sample_table_ids):
+                        print(f"Waiting {REQUEST_DELAY} seconds before next game...")
+                        import time
+                        time.sleep(REQUEST_DELAY)
                 
-                print(f"\n✅ Successfully parsed {len([r for r in parsing_results if r['success']])}/{len(parsing_results)} games")
+                print(f"\n✅ Processing complete!")
+                print(f"   Games scraped: {len(scraping_results)}/{len(sample_table_ids)}")
+                print(f"   Games parsed: {len([r for r in parsing_results if r['success']])}/{len(sample_table_ids)}")
                 
                 # Create clean scraping summary (without large HTML content)
                 clean_scraping_results = []

@@ -29,7 +29,7 @@ BGA_COOKIES = {
 }
 
 # Request settings
-REQUEST_DELAY = 2  # Seconds between requests
+REQUEST_DELAY = 1  # Seconds between requests
 TIMEOUT = 30  # Request timeout in seconds
 MAX_RETRIES = 3  # Maximum retry attempts
 

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class TMScraper:
     """Web scraper for Terraforming Mars replays from BoardGameArena"""
     
-    def __init__(self, chromedriver_path: str, request_delay: int = 2, headless: bool = False):
+    def __init__(self, chromedriver_path: str, request_delay: int = 1, headless: bool = False):
         """
         Initialize the scraper
         
@@ -450,6 +450,239 @@ class TMScraper:
             print(f"❌ Error scraping replay: {e}")
             return None
     
+    def scrape_player_game_history(self, player_id: str, max_clicks: int = 100, 
+                                 click_delay: int = 1, filter_arena_season: int = None) -> List[str]:
+        """
+        Scrape all table IDs from a player's game history by auto-clicking "See more"
+        
+        Args:
+            player_id: BGA player ID
+            max_clicks: Maximum number of "See more" clicks to prevent infinite loops
+            click_delay: Delay between clicks in seconds
+            filter_arena_season: If specified, only return games from this Arena season
+            
+        Returns:
+            list: List of table IDs found in the player's game history
+        """
+        if not self.driver:
+            raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        # Construct player history URL - this may need to be adjusted based on actual BGA URL pattern
+        player_url = f"https://boardgamearena.com/gamestats?player={player_id}&opponent_id=0&game_id=1924&finished=1"        
+        logger.info(f"Scraping game history for player {player_id}")
+        
+        try:
+            # Navigate to player page
+            print(f"Navigating to player page: {player_url}")
+            self.driver.get(player_url)
+            time.sleep(5)  # Wait for page to load
+            
+            # Check if we got an error page
+            page_source = self.driver.page_source
+            if 'must be logged' in page_source.lower():
+                print("❌ Authentication error - please make sure you're logged into BGA")
+                return []
+            
+            if 'fatal error' in page_source.lower():
+                print("❌ Fatal error on page - player page might not be accessible")
+                return []
+            
+            click_count = 0
+            games_loaded = 0
+            
+            print("Starting to load all games by clicking 'See more'...")
+            
+            while click_count < max_clicks:
+                # Primary strategy: Look for the specific ID "see_more_tables"
+                see_more_element = None
+                
+                try:
+                    see_more_element = self.driver.find_element(By.ID, "see_more_tables")
+                    print(f"Found 'See more' button using ID: see_more_tables")
+                except:
+                    # Fallback strategies if ID method fails
+                    print("ID method failed, trying fallback strategies...")
+                    
+                    # Strategy 1: Look for exact text "See more"
+                    see_more_elements = self.driver.find_elements(By.XPATH, 
+                        "//*[contains(text(), 'See more')]")
+                    
+                    if see_more_elements:
+                        see_more_element = see_more_elements[0]
+                        print(f"Found 'See more' using text search")
+                    
+                    # Strategy 2: Look for links with "See more" text
+                    if not see_more_element:
+                        see_more_elements = self.driver.find_elements(By.XPATH, 
+                            "//a[contains(text(), 'See more')]")
+                        if see_more_elements:
+                            see_more_element = see_more_elements[0]
+                            print(f"Found 'See more' link")
+                    
+                    # Strategy 3: Look for buttons with "See more" text
+                    if not see_more_element:
+                        see_more_elements = self.driver.find_elements(By.XPATH, 
+                            "//button[contains(text(), 'See more')]")
+                        if see_more_elements:
+                            see_more_element = see_more_elements[0]
+                            print(f"Found 'See more' button")
+                    
+                    # Strategy 4: Look for elements with class names that might indicate "see more"
+                    if not see_more_element:
+                        see_more_elements = self.driver.find_elements(By.CSS_SELECTOR, 
+                            "[class*='more'], [class*='load'], [class*='expand']")
+                        for elem in see_more_elements:
+                            try:
+                                if 'see more' in elem.text.lower() or 'more' in elem.text.lower():
+                                    see_more_element = elem
+                                    print(f"Found 'See more' using CSS selector: {elem.text}")
+                                    break
+                            except:
+                                continue
+                    
+                    # Strategy 5: Look for clickable elements at the bottom of the page
+                    if not see_more_element:
+                        # Scroll to bottom first
+                        self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(1)
+                        
+                        # Look for clickable elements near the bottom
+                        clickable_elements = self.driver.find_elements(By.XPATH, 
+                            "//a | //button | //div[@onclick] | //span[@onclick]")
+                        
+                        for elem in clickable_elements:
+                            try:
+                                elem_text = elem.text.lower().strip()
+                                if any(phrase in elem_text for phrase in ['see more', 'more', 'load more', 'show more']):
+                                    see_more_element = elem
+                                    print(f"Found potential 'See more' element: '{elem.text}'")
+                                    break
+                            except:
+                                continue
+                
+                # If no element found, break
+                if not see_more_element:
+                    print("No 'See more' button found - all games may be loaded")
+                    # Save current page source for debugging
+                    if click_count == 0:
+                        print("Saving page source for debugging...")
+                        with open('debug_page_source.html', 'w', encoding='utf-8') as f:
+                            f.write(self.driver.page_source)
+                        print("Page source saved to debug_page_source.html")
+                    break
+                
+                # Try to click the found element
+                try:
+                    # Scroll to element to make sure it's visible
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", see_more_element)
+                    time.sleep(1)
+                    
+                    # Try different click methods
+                    try:
+                        # Method 1: Regular click
+                        see_more_element.click()
+                    except:
+                        try:
+                            # Method 2: JavaScript click
+                            self.driver.execute_script("arguments[0].click();", see_more_element)
+                        except:
+                            # Method 3: Action chains click
+                            from selenium.webdriver.common.action_chains import ActionChains
+                            ActionChains(self.driver).move_to_element(see_more_element).click().perform()
+                    
+                    click_count += 1
+                    print(f"Clicked 'See more' #{click_count}, waiting for content to load...")
+                    time.sleep(click_delay)
+                    
+                    # Check for "No more results" message
+                    no_more_results = self.driver.find_elements(By.XPATH, 
+                        "//*[contains(text(), 'No more results')]")
+                    
+                    if no_more_results:
+                        print("✅ 'No more results' detected - all games loaded!")
+                        break
+                    
+                    # Count current games for progress tracking
+                    current_games = len(self.driver.find_elements(By.XPATH, 
+                        "//*[contains(@class, 'game') or contains(text(), '#')]"))
+                    
+                    if current_games > games_loaded:
+                        games_loaded = current_games
+                        print(f"Progress: ~{games_loaded} games loaded so far...")
+                    
+                except Exception as e:
+                    logger.warning(f"Error clicking 'See more' button: {e}")
+                    print(f"⚠️  Error clicking 'See more': {e}")
+                    print(f"Element tag: {see_more_element.tag_name}, text: '{see_more_element.text}'")
+                    break
+            
+            if click_count >= max_clicks:
+                print(f"⚠️  Reached maximum click limit ({max_clicks}). Some games might not be loaded.")
+            
+            # Extract table IDs from the fully loaded page
+            print("Extracting table IDs from loaded page...")
+            page_source = self.driver.page_source
+            table_ids = self._extract_table_ids_from_history(page_source)
+            
+            logger.info(f"Successfully extracted {len(table_ids)} table IDs from player {player_id}")
+            print(f"✅ Found {len(table_ids)} table IDs for player {player_id}")
+            
+            return table_ids
+            
+        except Exception as e:
+            logger.error(f"Error scraping player game history for {player_id}: {e}")
+            print(f"❌ Error scraping player game history: {e}")
+            return []
+    
+    def _extract_table_ids_from_history(self, html_content: str) -> List[str]:
+        """
+        Extract table IDs from player game history HTML
+        
+        Args:
+            html_content: HTML content of the player history page
+            
+        Returns:
+            list: List of unique table IDs found
+        """
+        table_ids = []
+        
+        try:
+            # Method 1: Look for table IDs in the format #XXXXXXXXX
+            table_id_pattern = r'#(\d{8,})'
+            matches = re.findall(table_id_pattern, html_content)
+            table_ids.extend(matches)
+            
+            # Method 2: Parse with BeautifulSoup for more structured extraction
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Look for links or elements that might contain table IDs
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if 'table' in href:
+                    # Extract table ID from URL parameters
+                    table_matches = re.findall(r'table[=:](\d+)', href)
+                    table_ids.extend(table_matches)
+            
+            # Look for elements with table ID text content
+            for element in soup.find_all(text=re.compile(r'#\d{8,}')):
+                text_matches = re.findall(r'#(\d{8,})', element)
+                table_ids.extend(text_matches)
+            
+            # Remove duplicates while preserving order
+            unique_table_ids = []
+            seen = set()
+            for table_id in table_ids:
+                if table_id not in seen and len(table_id) >= 8:
+                    unique_table_ids.append(table_id)
+                    seen.add(table_id)
+            
+            logger.info(f"Extracted {len(unique_table_ids)} unique table IDs")
+            return unique_table_ids
+            
+        except Exception as e:
+            logger.error(f"Error extracting table IDs from history: {e}")
+            return []
+
     def scrape_multiple_tables_and_replays(self, table_ids: List[str], save_raw: bool = True, 
                                          raw_data_dir: str = 'data/raw') -> List[Dict]:
         """
