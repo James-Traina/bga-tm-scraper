@@ -117,8 +117,7 @@ def main():
             
            
             print("\n🚀 Starting to scrape and parse games...")
-            sample_games = games_data[:10]
-            sample_table_ids = [game['table_id'] for game in sample_games]
+            table_ids_to_scrape = [game['table_id'] for game in games_data]
             
             # Initialize parser
             from src.parser import Parser
@@ -127,8 +126,8 @@ def main():
             scraping_results = []
             parsing_results = []
             
-            for i, table_id in enumerate(sample_table_ids, 1):
-                print(f"\n--- Processing game {i}/{len(sample_table_ids)} (table ID: {table_id}) ---")
+            for i, table_id in enumerate(table_ids_to_scrape, 1):
+                print(f"\n--- Processing game {i}/{len(table_ids_to_scrape)} (table ID: {table_id}) ---")
                 
                 # Scrape the game
                 print(f"Scraping game {table_id}...")
@@ -204,14 +203,14 @@ def main():
                     })
                 
                 # Add delay between games (except for the last one)
-                if i < len(sample_table_ids):
+                if i < len(table_ids_to_scrape):
                     print(f"Waiting {REQUEST_DELAY} seconds before next game...")
                     import time
                     time.sleep(REQUEST_DELAY)
             
                 print(f"\n✅ Processing complete!")
-                print(f"   Games scraped: {len(scraping_results)}/{len(sample_table_ids)}")
-                print(f"   Games parsed: {len([r for r in parsing_results if r['success']])}/{len(sample_table_ids)}")
+                print(f"   Games scraped: {len(scraping_results)}/{len(table_ids_to_scrape)}")
+                print(f"   Games parsed: {len([r for r in parsing_results if r['success']])}/{len(table_ids_to_scrape)}")
                 
                 # Create clean scraping summary (without large HTML content)
                 clean_scraping_results = []
@@ -250,10 +249,10 @@ def main():
                     'player_id': player_id,
                     'scraped_at': datetime.now().isoformat(),
                     'total_games_found': len(games_data),
-                    'games_scraped': len(sample_table_ids),
+                    'games_scraped': len(table_ids_to_scrape),
                     'successful_scrapes': len(scraping_results),
                     'successful_parses': len([r for r in parsing_results if r['success']]),
-                    'games_data': sample_games,  # Include datetime info for processed games
+                    'games_data': games_data,  # Include datetime info for processed games
                     'scraping_results': clean_scraping_results,
                     'parsing_results': parsing_results
                 }
