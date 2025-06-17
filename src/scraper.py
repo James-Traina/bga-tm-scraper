@@ -37,6 +37,24 @@ class TMScraper:
         self.request_delay = request_delay
         self.headless = headless
         self.driver = None
+        
+        # Load speed settings from config
+        try:
+            from config import CURRENT_SPEED, SPEED_PROFILE
+            self.speed_settings = CURRENT_SPEED
+            self.speed_profile = SPEED_PROFILE
+            logger.info(f"Using speed profile: {SPEED_PROFILE}")
+            logger.info(f"Speed settings: {CURRENT_SPEED}")
+        except ImportError:
+            # Fallback to default settings if config not available
+            self.speed_settings = {
+                "page_load_delay": 3,
+                "click_delay": 0.5,
+                "gamereview_delay": 2.5,
+                "element_wait_timeout": 8
+            }
+            self.speed_profile = "DEFAULT"
+            logger.warning("Could not load speed settings from config, using defaults")
     
     def start_browser(self):
         """Start the Chrome browser"""
@@ -188,7 +206,9 @@ class TMScraper:
             # Navigate to the table URL
             print(f"Navigating to table page: {table_url}")
             self.driver.get(table_url)
-            time.sleep(5)  # Wait for page to load
+            page_delay = self.speed_settings.get('page_load_delay', 3)
+            print(f"⏱️  Waiting {page_delay}s for page to load ({self.speed_profile} mode)")
+            time.sleep(page_delay)
             
             # Check if we got an error page
             page_source = self.driver.page_source
@@ -354,7 +374,9 @@ class TMScraper:
             # Navigate to the gamereview page
             print(f"Navigating to gamereview page: {gamereview_url}")
             self.driver.get(gamereview_url)
-            time.sleep(3)  # Wait for page to load
+            gamereview_delay = self.speed_settings.get('gamereview_delay', 2.5)
+            print(f"⏱️  Waiting {gamereview_delay}s for gamereview page to load ({self.speed_profile} mode)")
+            time.sleep(gamereview_delay)
             
             # Check if we got an error page
             page_source = self.driver.page_source
@@ -459,7 +481,9 @@ class TMScraper:
             # Navigate to the replay URL
             print(f"Navigating to: {url}")
             self.driver.get(url)
-            time.sleep(5)  # Wait for page to load
+            page_delay = self.speed_settings.get('page_load_delay', 3)
+            print(f"⏱️  Waiting {page_delay}s for replay page to load ({self.speed_profile} mode)")
+            time.sleep(page_delay)
             
             # Check if we got an error page
             page_source = self.driver.page_source
@@ -549,14 +573,14 @@ class TMScraper:
             return None
     
     def scrape_player_game_history(self, player_id: str, max_clicks: int = 100, 
-                                 click_delay: int = 1, filter_arena_season_21: bool = False) -> List[Dict]:
+                                 click_delay: Optional[float] = None, filter_arena_season_21: bool = False) -> List[Dict]:
         """
         Scrape all table IDs and datetimes from a player's game history by auto-clicking "See more"
         
         Args:
             player_id: BGA player ID
             max_clicks: Maximum number of "See more" clicks to prevent infinite loops
-            click_delay: Delay between clicks in seconds
+            click_delay: Delay between clicks in seconds (uses speed profile if None)
             filter_arena_season_21: If True, only return games from Arena season 21 date range (2025-04-08 to 2025-07-08)
             
         Returns:
@@ -564,6 +588,10 @@ class TMScraper:
         """
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        # Use speed profile click delay if not specified
+        if click_delay is None:
+            click_delay = self.speed_settings.get('click_delay', 0.5)
         
         # Construct player history URL - this may need to be adjusted based on actual BGA URL pattern
         player_url = f"https://boardgamearena.com/gamestats?player={player_id}&opponent_id=0&game_id=1924&finished=1"        
@@ -573,7 +601,9 @@ class TMScraper:
             # Navigate to player page
             print(f"Navigating to player page: {player_url}")
             self.driver.get(player_url)
-            time.sleep(5)  # Wait for page to load
+            page_delay = self.speed_settings.get('page_load_delay', 3)
+            print(f"⏱️  Waiting {page_delay}s for player page to load ({self.speed_profile} mode)")
+            time.sleep(page_delay)
             
             # Check if we got an error page
             page_source = self.driver.page_source

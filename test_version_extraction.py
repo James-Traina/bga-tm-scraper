@@ -18,6 +18,12 @@ def test_version_extraction():
         headless=False
     )
     
+    print(f"🚀 Speed optimizations enabled!")
+    print(f"   Speed profile: {scraper.speed_profile}")
+    print(f"   Page load delay: {scraper.speed_settings.get('page_load_delay')}s")
+    print(f"   Gamereview delay: {scraper.speed_settings.get('gamereview_delay')}s")
+    print(f"   Click delay: {scraper.speed_settings.get('click_delay')}s")
+    
     try:
         # Start browser
         print("Starting browser...")

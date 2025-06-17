@@ -35,6 +35,34 @@ REQUEST_DELAY = 1  # Seconds between requests
 TIMEOUT = 30  # Request timeout in seconds
 MAX_RETRIES = 3  # Maximum retry attempts
 
+# Speed settings - choose your preferred speed profile
+SPEED_PROFILE = "FAST"  # Options: "FAST", "NORMAL", "SAFE"
+
+# Speed profiles configuration
+SPEED_PROFILES = {
+    "FAST": {
+        "page_load_delay": 2,      # Seconds to wait after page navigation
+        "click_delay": 0.3,        # Seconds between "See more" clicks
+        "gamereview_delay": 2,     # Seconds to wait after loading gamereview page
+        "element_wait_timeout": 5   # Max seconds to wait for elements
+    },
+    "NORMAL": {
+        "page_load_delay": 3,
+        "click_delay": 0.5,
+        "gamereview_delay": 2.5,
+        "element_wait_timeout": 8
+    },
+    "SAFE": {
+        "page_load_delay": 5,      # Original conservative delays
+        "click_delay": 1,
+        "gamereview_delay": 3,
+        "element_wait_timeout": 10
+    }
+}
+
+# Get current speed settings
+CURRENT_SPEED = SPEED_PROFILES.get(SPEED_PROFILE, SPEED_PROFILES["NORMAL"])
+
 # Data storage paths
 RAW_DATA_DIR = 'data/raw'
 PROCESSED_DATA_DIR = 'data/processed'
