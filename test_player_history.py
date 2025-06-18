@@ -116,27 +116,8 @@ def main():
             # Save results to file
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
-            # Add games to registry based on retry setting
-            print(f"\n📝 Adding games to registry (retry mode: {'ON' if retry_checked_games else 'OFF'})...")
-            games_added = 0
-            for game in games_data:
-                table_id = game['table_id']
-                if retry_checked_games or not games_registry.is_game_checked(table_id):
-                    # Extract player IDs if available (might not be available from history scraping)
-                    player_ids = []  # Will be populated during actual scraping
-                    
-                    games_registry.add_game_check(
-                        table_id=table_id,
-                        raw_datetime=game['raw_datetime'],
-                        parsed_datetime=game['parsed_datetime'],
-                        players=player_ids,
-                        is_arena_mode=True  # Assume arena mode since we're filtering for it
-                    )
-                    games_added += 1
-            
-            # Save registry after adding all games
-            games_registry.save_registry()
-            print(f"📋 Added {games_added} games to registry")
+            # Note: We'll add games to registry only when we actually visit each table page
+            print(f"\n📝 Games will be added to registry when visited (retry mode: {'ON' if retry_checked_games else 'OFF'})...")
             
             # Filter games based on retry setting
             if retry_checked_games:
@@ -173,6 +154,19 @@ def main():
             
             for i, table_id in enumerate(table_ids_to_scrape, 1):
                 print(f"\n--- Processing game {i}/{len(table_ids_to_scrape)} (table ID: {table_id}) ---")
+                
+                # Add game to registry now that we're actually visiting it
+                game_info = next((game for game in new_games if game['table_id'] == table_id), None)
+                if game_info:
+                    games_registry.add_game_check(
+                        table_id=table_id,
+                        raw_datetime=game_info['raw_datetime'],
+                        parsed_datetime=game_info['parsed_datetime'],
+                        players=[],  # Will be populated after parsing
+                        is_arena_mode=True  # Assume arena mode since we're filtering for it
+                    )
+                    games_registry.save_registry()  # Save immediately
+                    print(f"📋 Added game {table_id} to registry")
                 
                 # Scrape the game
                 print(f"Scraping game {table_id}...")

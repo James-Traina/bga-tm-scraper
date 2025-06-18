@@ -6,6 +6,12 @@ TEST_URLS = [
     "https://boardgamearena.com/archive/replay/REPLAY_ID/?table=TABLE_ID&player=PLAYER_ID&comments=PLAYER_ID"
 ]
 
+# URL templates for constructing BGA URLs
+TABLE_URL_TEMPLATE = "https://boardgamearena.com/table?table={table_id}"
+# NOTE: REPLAY_URL_TEMPLATE is now used as fallback only. The scraper dynamically extracts 
+# the correct version number from the gamereview page for each game.
+REPLAY_URL_TEMPLATE = "https://boardgamearena.com/archive/replay/250604-1037/?table={table_id}&player={player_id}&comments={player_id}"
+
 
 # Request settings
 REQUEST_DELAY = 2  # Seconds between requests
