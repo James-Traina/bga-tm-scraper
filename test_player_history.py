@@ -183,7 +183,8 @@ def main():
                     scraping_results.append(scraping_result)
                     
                     # Check for replay limit reached
-                    if scraping_result.get('replay_data', {}).get('limit_reached', False):
+                    replay_data = scraping_result.get('replay_data', {})
+                    if replay_data and replay_data.get('limit_reached', False):
                         print("🚫 REPLAY LIMIT REACHED!")
                         print("   Stopping scraping process to respect BGA's daily limits.")
                         print("   Please try again tomorrow when the limit resets.")

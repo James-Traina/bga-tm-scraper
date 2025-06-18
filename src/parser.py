@@ -751,23 +751,51 @@ class Parser:
             return {}
 
     def _extract_g_gamelogs(self, html_content: str) -> Dict[str, Any]:
-        """Extract g_gamelogs JSON structure from HTML"""
+        """Extract g_gamelogs JSON with proper brace balancing"""
         try:
-            # Find the g_gamelogs variable in the HTML
-            pattern = r'g_gamelogs\s*=\s*(\{.*?\});'
-            match = re.search(pattern, html_content, re.DOTALL)
+            # Find the start of g_gamelogs
+            pattern = r'g_gamelogs\s*=\s*'
+            match = re.search(pattern, html_content)
             
             if not match:
                 logger.warning("g_gamelogs not found in HTML")
                 return {}
             
-            gamelogs_json = match.group(1)
+            start_pos = match.end()
             
-            # Parse the JSON
-            gamelogs = json.loads(gamelogs_json)
-            logger.info(f"Successfully extracted g_gamelogs with {len(gamelogs.get('data', {}).get('data', []))} entries")
+            # Find the complete JSON object by counting braces
+            brace_count = 0
+            in_string = False
+            escape_next = False
             
-            return gamelogs
+            for i, char in enumerate(html_content[start_pos:], start_pos):
+                if escape_next:
+                    escape_next = False
+                    continue
+                    
+                if char == '\\':
+                    escape_next = True
+                    continue
+                    
+                if char == '"' and not escape_next:
+                    in_string = not in_string
+                    continue
+                    
+                if not in_string:
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            # Found the end of the JSON object
+                            json_str = html_content[start_pos:i+1]
+                            return json.loads(json_str)
+                    elif char == ';' and brace_count == 0:
+                        # Hit semicolon before closing brace - malformed
+                        break
+            
+            logger.error("Could not find complete g_gamelogs JSON")
+            return {}
             
         except (json.JSONDecodeError, AttributeError) as e:
             logger.error(f"Error extracting g_gamelogs: {e}")
