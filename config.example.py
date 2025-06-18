@@ -21,7 +21,13 @@ URLS_DIR = 'data/urls'
 CHROME_PATH = r'C:\Program Files\Google\Chrome\Application\chrome.exe'  # Update this path
 CHROMEDRIVER_PATH = r'C:\path\to\chromedriver.exe'  # Update this path - download from https://chromedriver.chromium.org/
 
-# Leaderboard settings (for future use)
+# BGA Login Credentials
+BGA_EMAIL = "your_email@example.com"
+BGA_PASSWORD = "your_password"
+
+# Leaderboard settings
+TERRAFORMING_MARS_GAME_ID = 1924
+DEFAULT_PLAYER_COUNT = 100
 TOP_N_PLAYERS = 100
 SEASON_21_FILTER = True  # Only get Season 21 games
 TWO_PLAYER_ONLY = True   # Only get 2-player games
