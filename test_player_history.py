@@ -7,12 +7,12 @@ import json
 import os
 from datetime import datetime
 
-# Setup logging
+# Setup logging with UTF-8 encoding to handle Unicode characters (emojis)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('player_history_scraper.log'),
+        logging.FileHandler('player_history_scraper.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
