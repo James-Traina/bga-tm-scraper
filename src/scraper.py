@@ -170,6 +170,80 @@ class TMScraper:
             print("⚠️  Could not verify login, but continuing anyway...")
             return True
     
+    def scrape_table_only(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Scrape only the table page for a game, extract player info and check Arena mode
+        
+        Args:
+            table_id: BGA table ID
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Table data with player info and Arena mode status, or None if failed
+        """
+        if not self.driver:
+            raise RuntimeError("Browser not started. Call start_browser() first.")
+        
+        logger.info(f"Scraping table only for game {table_id}")
+        
+        try:
+            # Step 1: Scrape table page for ELO data
+            logger.info("Scraping table page...")
+            table_data = self.scrape_table_page(table_id, save_raw, raw_data_dir)
+            if not table_data:
+                logger.error(f"Failed to scrape table page for {table_id}")
+                return None
+
+            # Step 2: Check if this is an Arena mode game using ELO data
+            logger.info("Checking if game is Arena mode using ELO data...")
+            is_arena_mode = self._is_arena_mode_game_by_elo(table_data['html_content'])
+            
+            # Step 3: Extract player information using parser
+            logger.info("Extracting player information...")
+            from src.parser import Parser
+            parser = Parser()
+            elo_data = parser.parse_elo_data(table_data['html_content'])
+            
+            # Extract player IDs using a simplified approach for table-only scraping
+            player_ids = []
+            if elo_data:
+                # Get player names from ELO data
+                player_names = list(elo_data.keys())
+                logger.info(f"Found {len(player_names)} players with ELO data: {player_names}")
+                
+                # Use a simplified player ID extraction for table-only mode
+                player_id_mapping = self._extract_player_ids_simple(table_data['html_content'], player_names)
+                player_ids = list(player_id_mapping.values())
+                logger.info(f"Mapped to {len(player_ids)} player IDs: {player_ids}")
+            else:
+                logger.warning("No ELO data found - cannot extract player IDs")
+            
+            # Step 4: Combine results
+            result_data = {
+                'table_id': table_id,
+                'table_data': table_data,
+                'scraped_at': datetime.now().isoformat(),
+                'success': True,
+                'arena_mode': is_arena_mode,
+                'player_ids': player_ids,
+                'elo_data': elo_data,
+                'table_only': True  # Flag to indicate this was table-only scraping
+            }
+            
+            if is_arena_mode:
+                logger.info(f"Successfully scraped Arena mode game {table_id} (table only)")
+                print(f"✅ Game {table_id} is Arena mode - table data extracted")
+            else:
+                logger.info(f"Game {table_id} is not Arena mode - table data extracted")
+                print(f"⏭️  Game {table_id} is not Arena mode - table data extracted")
+            
+            return result_data
+            
+        except Exception as e:
+            logger.error(f"Error scraping table only for {table_id}: {e}")
+            return None
+
     def scrape_table_and_replay(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
         Scrape both table page and replay page for a game, filtering for Arena mode only
@@ -217,9 +291,7 @@ class TMScraper:
             player_ids = self.extract_player_ids_from_table(table_data['html_content'])
             if not player_ids:
                 logger.warning(f"No player IDs found in table page for {table_id}")
-                # Use a default player ID or continue without it
-                player_ids = ["86296239"]  # Fallback from original URL
-            
+                
             # Step 4: Construct and scrape replay page
             logger.info("Extracting replay...")
             replay_data = self.scrape_replay_from_table(table_id, player_ids[0], save_raw, raw_data_dir)
@@ -1503,6 +1575,79 @@ class TMScraper:
             logger.error(f"Error checking Arena season for game {table_id}: {e}")
             return False
 
+
+    def _extract_player_ids_simple(self, html_content: str, player_names: List[str]) -> Dict[str, str]:
+        """
+        Simplified player ID extraction for table-only scraping to avoid regex backtracking issues
+        
+        Args:
+            html_content: HTML content of the table page
+            player_names: List of player names from ELO data
+            
+        Returns:
+            dict: Mapping of player names to player IDs
+        """
+        player_id_map = {}
+        
+        try:
+            # Get valid player IDs from VP data first (this is fast and reliable)
+            from src.parser import Parser
+            parser = Parser()
+            vp_data = parser._extract_vp_data_from_html(html_content)
+            valid_player_ids = list(vp_data.keys())
+            
+            logger.info(f"Found {len(valid_player_ids)} valid player IDs from VP data: {valid_player_ids}")
+            
+            # Simple mapping: if we have the same number of players in both lists, map by order
+            if len(player_names) == len(valid_player_ids):
+                for i, player_name in enumerate(player_names):
+                    if i < len(valid_player_ids):
+                        player_id_map[player_name] = valid_player_ids[i]
+                        logger.info(f"Mapped {player_name} -> {valid_player_ids[i]}")
+            else:
+                # Fallback: try a simple, limited regex search for each player
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                for player_name in player_names:
+                    # Look for the player name in playername spans and find nearby player IDs
+                    player_spans = soup.find_all('span', class_='playername', string=player_name)
+                    
+                    for span in player_spans:
+                        # Look in the parent elements for player IDs (limited scope)
+                        parent = span.parent
+                        if parent:
+                            parent_str = str(parent)[:500]  # Limit to 500 chars to avoid backtracking
+                            # Simple regex for 8-12 digit numbers
+                            id_matches = re.findall(r'\b(\d{8,12})\b', parent_str)
+                            for match in id_matches:
+                                if match in valid_player_ids:
+                                    player_id_map[player_name] = match
+                                    logger.info(f"Mapped {player_name} -> {match} (via parent search)")
+                                    break
+                        
+                        if player_name in player_id_map:
+                            break
+                
+                # Final fallback: assign remaining IDs to unmapped players
+                mapped_ids = set(player_id_map.values())
+                unmapped_players = [p for p in player_names if p not in player_id_map]
+                remaining_ids = [pid for pid in valid_player_ids if pid not in mapped_ids]
+                
+                for i, player_name in enumerate(unmapped_players):
+                    if i < len(remaining_ids):
+                        player_id_map[player_name] = remaining_ids[i]
+                        logger.info(f"Mapped {player_name} -> {remaining_ids[i]} (fallback)")
+            
+            logger.info(f"Final player ID mapping: {player_id_map}")
+            return player_id_map
+            
+        except Exception as e:
+            logger.error(f"Error in simplified player ID extraction: {e}")
+            # Emergency fallback: create dummy IDs
+            fallback_map = {}
+            for i, player_name in enumerate(player_names):
+                fallback_map[player_name] = f"player_{i}"
+            return fallback_map
 
     def _is_arena_mode_game_by_elo(self, html_content: str) -> bool:
         """
