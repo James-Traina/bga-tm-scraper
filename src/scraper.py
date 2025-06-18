@@ -5,6 +5,7 @@ import time
 import os
 import logging
 import re
+import requests
 from typing import List, Optional, Dict, Tuple
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -57,6 +58,9 @@ class TMScraper:
         
         # Hybrid session manager
         self.hybrid_session: Optional[BGAHybridSession] = None
+        
+        # Session for direct HTTP requests
+        self.requests_session: Optional[requests.Session] = None
         
         # Load speed settings from config
         try:
@@ -1311,6 +1315,299 @@ class TMScraper:
         logger.info(f"Batch scraping completed. Successfully scraped {len(results)}/{len(urls)} replays")
         return results
     
+    def initialize_session(self) -> bool:
+        """
+        Initialize authenticated session for direct HTTP requests
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.email or not self.password:
+            logger.error("Email and password are required for session initialization")
+            return False
+        
+        try:
+            # Initialize hybrid session to get cookies
+            if not self.hybrid_session:
+                print("🔐 Initializing session for direct requests...")
+                self.hybrid_session = BGAHybridSession(
+                    email=self.email,
+                    password=self.password,
+                    chromedriver_path=self.chromedriver_path,
+                    headless=True  # Use headless for session-only initialization
+                )
+                
+                if not self.hybrid_session.login():
+                    logger.error("Session initialization failed")
+                    return False
+            
+            # Create requests session and copy cookies
+            self.requests_session = requests.Session()
+            
+            # Get cookies from the browser session
+            if self.hybrid_session.driver:
+                cookies = self.hybrid_session.driver.get_cookies()
+                for cookie in cookies:
+                    self.requests_session.cookies.set(
+                        cookie['name'], 
+                        cookie['value'], 
+                        domain=cookie.get('domain', '.boardgamearena.com')
+                    )
+                logger.info(f"Copied {len(cookies)} cookies to requests session")
+            
+            # Set appropriate headers
+            self.requests_session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            })
+            
+            print("✅ Session initialized successfully!")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error initializing session: {e}")
+            return False
+
+    def fetch_replay_direct(self, table_id: str, version: str, player_id: str, 
+                           save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Fetch replay HTML directly using requests session (no browser needed)
+        
+        Args:
+            table_id: BGA table ID
+            version: Version number for replay URL
+            player_id: Player ID for replay URL construction
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Replay data or None if failed
+        """
+        if not self.requests_session:
+            logger.error("Requests session not initialized. Call initialize_session() first.")
+            return None
+        
+        # Construct replay URL
+        replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={table_id}&player={player_id}&comments={player_id}"
+        logger.info(f"Fetching replay directly: {replay_url}")
+        
+        try:
+            print(f"🌐 Fetching replay via HTTP: {replay_url}")
+            
+            # Make the request
+            response = self.requests_session.get(replay_url, timeout=30)
+            response.raise_for_status()
+            
+            page_source = response.text
+            logger.info(f"Successfully fetched replay HTML ({len(page_source)} chars)")
+            
+            # Check for authentication errors
+            if 'must be logged' in page_source.lower():
+                logger.warning("Authentication error in direct fetch")
+                print("❌ Authentication error - session may have expired")
+                return None
+            
+            # Check for replay limit
+            if self._check_replay_limit_reached(page_source):
+                logger.warning(f"Replay limit reached when fetching {replay_url}")
+                print("🚫 You have reached your daily replay limit!")
+                return {
+                    'replay_id': table_id,
+                    'url': replay_url,
+                    'scraped_at': datetime.now().isoformat(),
+                    'error': 'replay_limit_reached',
+                    'limit_reached': True,
+                    'html_length': len(page_source),
+                    'direct_fetch': True
+                }
+            
+            # Save raw HTML if requested
+            if save_raw:
+                os.makedirs(raw_data_dir, exist_ok=True)
+                raw_file_path = os.path.join(raw_data_dir, f"replay_{table_id}.html")
+                
+                with open(raw_file_path, 'w', encoding='utf-8') as f:
+                    f.write(page_source)
+                logger.info(f"Saved raw HTML to {raw_file_path}")
+            
+            # Parse the HTML to extract basic information
+            soup = BeautifulSoup(page_source, 'html.parser')
+            
+            # Extract basic replay information
+            replay_data = {
+                'replay_id': table_id,
+                'url': replay_url,
+                'scraped_at': datetime.now().isoformat(),
+                'html_length': len(page_source),
+                'title': None,
+                'players': [],
+                'game_logs_found': False,
+                'direct_fetch': True  # Flag to indicate this was direct fetching
+            }
+            
+            # Try to extract title
+            title_elem = soup.find('title')
+            if title_elem:
+                replay_data['title'] = title_elem.get_text().strip()
+            
+            # Look for game logs section
+            game_logs = soup.find_all('div', class_='replaylogs_move')
+            if game_logs:
+                replay_data['game_logs_found'] = True
+                replay_data['num_moves'] = len(game_logs)
+                logger.info(f"Found {len(game_logs)} game log entries")
+                print(f"✅ Found {len(game_logs)} game log entries (direct fetch)")
+            else:
+                logger.warning("No game logs found in replay")
+                print("⚠️  No game logs found in direct fetch")
+            
+            # Try to extract player information
+            player_elements = soup.find_all('span', class_='playername')
+            for player_elem in player_elements:
+                player_name = player_elem.get_text().strip()
+                if player_name:
+                    replay_data['players'].append(player_name)
+            
+            logger.info(f"Successfully fetched replay {table_id} via direct HTTP")
+            print(f"✅ Direct fetch successful for replay {table_id}")
+            return replay_data
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"HTTP error fetching replay {table_id}: {e}")
+            print(f"❌ HTTP error fetching replay: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error in direct replay fetch for {table_id}: {e}")
+            print(f"❌ Error in direct fetch: {e}")
+            return None
+
+    def can_use_direct_fetch(self, table_id: str, raw_data_dir: str = 'data/raw') -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Check if we can use direct fetching for a game (table HTML exists + version available)
+        
+        Args:
+            table_id: BGA table ID
+            raw_data_dir: Directory where raw HTML files are stored
+            
+        Returns:
+            tuple: (can_use_direct, version, player_id) where:
+                - can_use_direct: bool indicating if direct fetch is possible
+                - version: version number if available, None otherwise
+                - player_id: first player ID if available, None otherwise
+        """
+        try:
+            # Check if table HTML file exists
+            table_html_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
+            if not os.path.exists(table_html_path):
+                logger.debug(f"Table HTML not found for {table_id}")
+                return False, None, None
+            
+            # Read table HTML to extract player IDs and check for version in registry
+            with open(table_html_path, 'r', encoding='utf-8') as f:
+                table_html = f.read()
+            
+            # Extract player IDs from table HTML
+            player_ids = self.extract_player_ids_from_table(table_html)
+            if not player_ids:
+                logger.debug(f"No player IDs found in table HTML for {table_id}")
+                return False, None, None
+            
+            # Check if version is available in games registry
+            from src.games_registry import GamesRegistry
+            games_registry = GamesRegistry()
+            game_info = games_registry.get_game_info(table_id)
+            
+            if not game_info or not game_info.get('version'):
+                logger.debug(f"No version found in registry for {table_id}")
+                return False, None, None
+            
+            version = game_info['version']
+            player_id = player_ids[0]  # Use first player ID
+            
+            logger.info(f"Direct fetch possible for {table_id}: version={version}, player_id={player_id}")
+            return True, version, player_id
+            
+        except Exception as e:
+            logger.error(f"Error checking direct fetch capability for {table_id}: {e}")
+            return False, None, None
+
+    def scrape_with_smart_mode(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+        """
+        Smart scraping that chooses between direct fetch and browser scraping based on available data
+        
+        Args:
+            table_id: BGA table ID
+            save_raw: Whether to save raw HTML
+            raw_data_dir: Directory to save raw HTML files
+            
+        Returns:
+            dict: Combined scraped data or None if failed
+        """
+        logger.info(f"Smart scraping for game {table_id}")
+        
+        # Check if we can use direct fetching
+        can_direct, version, player_id = self.can_use_direct_fetch(table_id, raw_data_dir)
+        
+        if can_direct:
+            print(f"🚀 Using direct fetch mode for game {table_id} (table HTML + version available)")
+            
+            # Initialize session if not already done
+            if not self.requests_session:
+                if not self.initialize_session():
+                    print("❌ Failed to initialize session, falling back to browser mode")
+                    return self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            
+            # Read existing table HTML
+            table_html_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
+            with open(table_html_path, 'r', encoding='utf-8') as f:
+                table_html = f.read()
+            
+            # Create table data structure
+            table_data = {
+                'table_id': table_id,
+                'url': f"https://boardgamearena.com/table?table={table_id}",
+                'scraped_at': datetime.now().isoformat(),
+                'html_length': len(table_html),
+                'html_content': table_html,
+                'players_found': [],
+                'elo_data_found': True,  # Assume true since we have the file
+                'from_file': True  # Flag to indicate this was loaded from file
+            }
+            
+            # Fetch replay directly
+            replay_data = self.fetch_replay_direct(table_id, version, player_id, save_raw, raw_data_dir)
+            if not replay_data:
+                print("❌ Direct fetch failed, falling back to browser mode")
+                return self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            
+            # Combine results
+            combined_data = {
+                'table_id': table_id,
+                'table_data': table_data,
+                'replay_data': replay_data,
+                'scraped_at': datetime.now().isoformat(),
+                'success': True,
+                'arena_mode': True,  # Assume true since it's in registry
+                'version': version,
+                'smart_mode': 'direct_fetch'
+            }
+            
+            logger.info(f"Successfully scraped game {table_id} using direct fetch")
+            print(f"✅ Smart mode (direct fetch) successful for game {table_id}")
+            return combined_data
+            
+        else:
+            print(f"🌐 Using browser mode for game {table_id} (missing table HTML or version)")
+            # Fall back to normal browser scraping
+            result = self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            if result:
+                result['smart_mode'] = 'browser_scraping'
+            return result
+
     def close_browser(self):
         """Close the browser and cleanup hybrid session"""
         if self.hybrid_session:
@@ -1330,6 +1627,16 @@ class TMScraper:
                 pass
             finally:
                 self.driver = None
+        
+        # Close requests session
+        if self.requests_session:
+            try:
+                self.requests_session.close()
+                logger.info("Requests session closed")
+            except:
+                pass
+            finally:
+                self.requests_session = None
 
     def refresh_authentication(self) -> bool:
         """
