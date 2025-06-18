@@ -43,6 +43,7 @@ scraper.log
 # Data directories (contain scraped data)
 data/raw/
 data/processed/
+data/parsed/
 data/urls/
 
 # Chrome debug profile
