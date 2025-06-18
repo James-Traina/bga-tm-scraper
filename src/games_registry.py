@@ -18,7 +18,7 @@ class GamesRegistry:
         self.registry_path = registry_path
         self.fieldnames = [
             'TableId', 'RawDatetime', 'ParsedDatetime', 'Players', 
-            'IsArenaMode', 'ScrapedAt', 'ParsedAt'
+            'IsArenaMode', 'Version', 'ScrapedAt', 'ParsedAt'
         ]
         self.registry_data = {}
         self.load_registry()
@@ -39,6 +39,7 @@ class GamesRegistry:
                             'parsed_datetime': row['ParsedDatetime'],
                             'players': row['Players'].split('|') if row['Players'] else [],
                             'is_arena_mode': bool(int(row['IsArenaMode'])) if row['IsArenaMode'] else False,
+                            'version': row.get('Version', '') if row.get('Version') else None,
                             'scraped_at': row['ScrapedAt'] if row['ScrapedAt'] else None,
                             'parsed_at': row['ParsedAt'] if row['ParsedAt'] else None
                         }
@@ -73,13 +74,14 @@ class GamesRegistry:
                     'ParsedDatetime': game_data['parsed_datetime'],
                     'Players': '|'.join(str(pid) for pid in game_data['players']),
                     'IsArenaMode': '1' if game_data['is_arena_mode'] else '0',
+                    'Version': game_data.get('version', '') if game_data.get('version') else '',
                     'ScrapedAt': game_data['scraped_at'] if game_data['scraped_at'] else '',
                     'ParsedAt': game_data['parsed_at'] if game_data['parsed_at'] else ''
                 }
                 writer.writerow(csv_row)
     
     def add_game_check(self, table_id: str, raw_datetime: str, parsed_datetime: str, 
-                      players: List[str], is_arena_mode: bool = True) -> None:
+                      players: List[str], is_arena_mode: bool = True, version: Optional[str] = None) -> None:
         """Add a game check entry (called when encountering any game, even if skipped)"""
         game_entry = {
             'table_id': table_id,
@@ -87,6 +89,7 @@ class GamesRegistry:
             'parsed_datetime': parsed_datetime,
             'players': [str(pid) for pid in players],  # Ensure all are strings
             'is_arena_mode': is_arena_mode,
+            'version': version,
             'scraped_at': None,
             'parsed_at': None
         }
@@ -219,6 +222,23 @@ class GamesRegistry:
             }
             self.registry_data[table_id] = game_entry
     
+    def update_game_version(self, table_id: str, version: str) -> None:
+        """Update the version number for an existing game"""
+        if table_id in self.registry_data:
+            self.registry_data[table_id]['version'] = version
+        else:
+            # Create minimal entry if game doesn't exist
+            self.registry_data[table_id] = {
+                'table_id': table_id,
+                'raw_datetime': '',
+                'parsed_datetime': '',
+                'players': [],
+                'is_arena_mode': True,
+                'version': version,
+                'scraped_at': None,
+                'parsed_at': None
+            }
+
     def get_game_info(self, table_id: str) -> Optional[Dict]:
         """Get information about a specific game"""
         return self.registry_data.get(table_id)

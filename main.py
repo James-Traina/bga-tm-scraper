@@ -224,16 +224,19 @@ def main():
                             # Extract player info and add to CSV directly
                             player_ids = scraping_result.get('player_ids', [])
                             is_arena_mode = scraping_result.get('arena_mode', False)
+                            version = scraping_result.get('version')
                             
-                            # Update registry with player info and arena mode status
+                            # Update registry with player info, arena mode status, and version
                             if games_registry.is_game_checked(table_id):
                                 game_info = games_registry.get_game_info(table_id)
                                 if game_info:
                                     game_info['players'] = player_ids
                                     game_info['is_arena_mode'] = is_arena_mode
+                                    game_info['version'] = version
                             
                             # Add to CSV (games.csv will be updated by the registry)
-                            print(f"📊 Added game {table_id} to CSV - Arena mode: {'✅' if is_arena_mode else '❌'}, Players: {len(player_ids)}")
+                            version_text = f"Version: {version}" if version else "No version"
+                            print(f"📊 Added game {table_id} to CSV - Arena mode: {'✅' if is_arena_mode else '❌'}, Players: {len(player_ids)}, {version_text}")
                             
                             # Add to parsing results as table-only success
                             parsing_results.append({
@@ -242,6 +245,7 @@ def main():
                                 'table_only': True,
                                 'arena_mode': is_arena_mode,
                                 'players_count': len(player_ids),
+                                'version': version,
                                 'elo_data_included': len(scraping_result.get('elo_data', {})) > 0
                             })
                             

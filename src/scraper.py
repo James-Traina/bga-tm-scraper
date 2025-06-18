@@ -219,7 +219,17 @@ class TMScraper:
             else:
                 logger.warning("No ELO data found - cannot extract player IDs")
             
-            # Step 4: Combine results
+            # Step 4: Extract version number from gamereview page
+            logger.info("Extracting version number...")
+            version = self.extract_version_from_gamereview(table_id)
+            if version:
+                logger.info(f"Successfully extracted version: {version}")
+                print(f"✅ Version extracted: {version}")
+            else:
+                logger.warning("Could not extract version number")
+                print("⚠️  Could not extract version number")
+
+            # Step 5: Combine results
             result_data = {
                 'table_id': table_id,
                 'table_data': table_data,
@@ -228,6 +238,7 @@ class TMScraper:
                 'arena_mode': is_arena_mode,
                 'player_ids': player_ids,
                 'elo_data': elo_data,
+                'version': version,
                 'table_only': True  # Flag to indicate this was table-only scraping
             }
             
@@ -292,7 +303,17 @@ class TMScraper:
             if not player_ids:
                 logger.warning(f"No player IDs found in table page for {table_id}")
                 
-            # Step 4: Construct and scrape replay page
+            # Step 4: Extract version number from gamereview page
+            logger.info("Extracting version number...")
+            version = self.extract_version_from_gamereview(table_id)
+            if version:
+                logger.info(f"Successfully extracted version: {version}")
+                print(f"✅ Version extracted: {version}")
+            else:
+                logger.warning("Could not extract version number")
+                print("⚠️  Could not extract version number")
+
+            # Step 5: Construct and scrape replay page
             logger.info("Extracting replay...")
             replay_data = self.scrape_replay_from_table(table_id, player_ids[0], save_raw, raw_data_dir)
             if not replay_data:
@@ -300,14 +321,15 @@ class TMScraper:
                 # Continue with just table data
                 replay_data = {}
             
-            # Step 5: Combine results
+            # Step 6: Combine results
             combined_data = {
                 'table_id': table_id,
                 'table_data': table_data,
                 'replay_data': replay_data,
                 'scraped_at': datetime.now().isoformat(),
                 'success': True,
-                'arena_mode': True
+                'arena_mode': True,
+                'version': version
             }
             
             logger.info(f"Successfully scraped Arena mode game {table_id}")
