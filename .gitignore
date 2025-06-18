@@ -48,7 +48,8 @@ data/urls/
 # Chrome debug profile
 chrome-debug-profile/
 
-# Sensitive configuration (keep config.py but ignore sensitive versions)
+# Sensitive configuration
+config.py
 config_local.py
 config_production.py
 
