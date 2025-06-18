@@ -14,6 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+from .bga_hybrid_session import BGAHybridSession
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,8 @@ ARENA_SEASON_21_END = datetime(2025, 7, 8, 23, 59, 59)  # End of day
 class TMScraper:
     """Web scraper for Terraforming Mars replays from BoardGameArena"""
     
-    def __init__(self, chromedriver_path: str, request_delay: int = 1, headless: bool = False):
+    def __init__(self, chromedriver_path: str, request_delay: int = 1, headless: bool = False, 
+                 email: Optional[str] = None, password: Optional[str] = None):
         """
         Initialize the scraper
         
@@ -32,11 +34,29 @@ class TMScraper:
             chromedriver_path: Path to ChromeDriver executable
             request_delay: Delay between requests in seconds
             headless: Whether to run Chrome in headless mode
+            email: BGA account email (optional, will try to load from config if not provided)
+            password: BGA account password (optional, will try to load from config if not provided)
         """
         self.chromedriver_path = chromedriver_path
         self.request_delay = request_delay
         self.headless = headless
         self.driver = None
+        
+        # Authentication credentials
+        self.email = email
+        self.password = password
+        
+        # Try to load credentials from config if not provided
+        if not self.email or not self.password:
+            try:
+                from config import BGA_EMAIL, BGA_PASSWORD
+                self.email = self.email or BGA_EMAIL
+                self.password = self.password or BGA_PASSWORD
+            except ImportError:
+                logger.warning("No credentials provided and could not load from config")
+        
+        # Hybrid session manager
+        self.hybrid_session: Optional[BGAHybridSession] = None
         
         # Load speed settings from config
         try:
@@ -56,8 +76,48 @@ class TMScraper:
             self.speed_profile = "DEFAULT"
             logger.warning("Could not load speed settings from config, using defaults")
     
+    def start_browser_and_login(self) -> bool:
+        """
+        Start browser and perform automated login using hybrid session manager
+        
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not self.email or not self.password:
+            logger.error("Email and password are required for automated login")
+            print("❌ Email and password are required for automated login")
+            print("Please provide credentials via constructor or config.py")
+            return False
+        
+        try:
+            # Initialize hybrid session manager
+            print("🔐 Starting automated login process...")
+            self.hybrid_session = BGAHybridSession(
+                email=self.email,
+                password=self.password,
+                chromedriver_path=self.chromedriver_path,
+                headless=self.headless
+            )
+            
+            # Perform hybrid authentication
+            if not self.hybrid_session.login():
+                logger.error("Hybrid authentication failed")
+                print("❌ Automated login failed")
+                return False
+            
+            # Get the authenticated browser driver
+            self.driver = self.hybrid_session.get_driver()
+            
+            print("✅ Automated login completed successfully!")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error during automated login: {e}")
+            print(f"❌ Error during automated login: {e}")
+            return False
+
     def start_browser(self):
-        """Start the Chrome browser"""
+        """Start the Chrome browser (legacy method - use start_browser_and_login for automated login)"""
         print("Starting Chrome browser...")
         
         chrome_options = Options()
@@ -490,11 +550,13 @@ class TMScraper:
             
             # Check for authentication errors and retry once
             if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
-                logger.warning("Authentication error detected, attempting re-login...")
+                logger.warning("Authentication error detected, attempting re-authentication...")
                 print("⚠️  Session expired! Attempting to re-authenticate...")
                 
-                # Try to re-authenticate
-                self.login_to_bga()
+                # Try to re-authenticate using hybrid session or fallback to manual
+                if not self.refresh_authentication():
+                    print("❌ Authentication refresh failed")
+                    return None
                 
                 # Retry the replay page
                 print(f"Retrying replay page: {url}")
@@ -504,7 +566,7 @@ class TMScraper:
                 # Check again
                 page_source = self.driver.page_source
                 if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
-                    print("❌ Authentication failed even after re-login")
+                    print("❌ Authentication failed even after re-authentication")
                     return None
                 else:
                     print("✅ Re-authentication successful!")
@@ -1141,13 +1203,52 @@ class TMScraper:
         return results
     
     def close_browser(self):
-        """Close the browser"""
-        if self.driver:
+        """Close the browser and cleanup hybrid session"""
+        if self.hybrid_session:
+            try:
+                self.hybrid_session.close_browser()
+                print("Browser closed via hybrid session")
+            except:
+                pass
+            finally:
+                self.hybrid_session = None
+                self.driver = None
+        elif self.driver:
             try:
                 self.driver.quit()
                 print("Browser closed")
             except:
                 pass
+            finally:
+                self.driver = None
+
+    def refresh_authentication(self) -> bool:
+        """
+        Refresh authentication when session expires
+        
+        Returns:
+            bool: True if refresh successful, False otherwise
+        """
+        if self.hybrid_session:
+            logger.info("Refreshing hybrid session authentication...")
+            print("🔄 Refreshing authentication...")
+            
+            try:
+                if self.hybrid_session.refresh_authentication():
+                    self.driver = self.hybrid_session.get_driver()
+                    print("✅ Authentication refreshed successfully!")
+                    return True
+                else:
+                    print("❌ Authentication refresh failed")
+                    return False
+            except Exception as e:
+                logger.error(f"Error refreshing authentication: {e}")
+                print(f"❌ Error refreshing authentication: {e}")
+                return False
+        else:
+            logger.warning("No hybrid session available for refresh")
+            print("⚠️  No hybrid session available - falling back to manual login")
+            return self.login_to_bga()
     
     def _check_login_status(self) -> bool:
         """Check if we're still logged into BGA"""

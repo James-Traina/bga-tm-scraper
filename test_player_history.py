@@ -84,11 +84,14 @@ def main():
     os.makedirs('data/processed', exist_ok=True)
     
     try:
-        # Start browser
-        scraper.start_browser()
-        
-        # Manual login
-        scraper.login_to_bga()
+        # Start browser and perform automated login
+        if not scraper.start_browser_and_login():
+            print("❌ Failed to start browser and login automatically")
+            print("Falling back to manual login...")
+            
+            # Fallback to manual login if automated login fails
+            scraper.start_browser()
+            scraper.login_to_bga()
         
         # Scrape player game history with datetime information
         print(f"\n🎯 Starting to scrape game history for player {player_id}...")
