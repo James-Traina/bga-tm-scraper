@@ -41,8 +41,9 @@ def main():
         print("2. Update CHROMEDRIVER_PATH in config.py")
         return
     
-    # Import scraper module
+# Import scraper module
     from src.scraper import TMScraper
+    from src.games_registry import GamesRegistry
     
     # Get player ID from user
     player_id = input("Enter the BGA player ID to scrape game history for: ").strip()
@@ -56,6 +57,11 @@ def main():
         print("🎯 Arena season 21 filtering enabled - only games from 2025-04-08 to 2025-07-08 will be included")
     else:
         print("📅 No date filtering - all games will be included")
+    
+    # Initialize games registry
+    print("\n📋 Loading master games registry...")
+    games_registry = GamesRegistry()
+    games_registry.print_stats()
     
     # Initialize scraper
     scraper = TMScraper(
@@ -100,23 +106,25 @@ def main():
             
             # Save results to file
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            results_file = f"data/processed/player_{player_id}_games_with_datetimes_{timestamp}.json"
             
-            results_data = {
-                'player_id': player_id,
-                'scraped_at': datetime.now().isoformat(),
-                'total_games_found': len(games_data),
-                'games_data': games_data
-            }
+            # Filter out already scraped games
+            print(f"\n🔍 Checking for already scraped games...")
+            new_games = games_registry.filter_new_games(games_data)
+            already_scraped = len(games_data) - len(new_games)
             
-            with open(results_file, 'w', encoding='utf-8') as f:
-                json.dump(results_data, f, indent=2, ensure_ascii=False)
+            if already_scraped > 0:
+                print(f"⏭️  Found {already_scraped} games already in registry - skipping duplicates")
+                print(f"📋 {len(new_games)} new games to process")
+            else:
+                print(f"📋 All {len(games_data)} games are new - proceeding with full scraping")
             
-            print(f"\n💾 Results saved to: {results_file}")
-            
+            if not new_games:
+                print("✅ No new games to scrape - all games already processed!")
+                games_registry.print_stats()
+                return
            
             print("\n🚀 Starting to scrape and parse games...")
-            table_ids_to_scrape = [game['table_id'] for game in games_data]
+            table_ids_to_scrape = [game['table_id'] for game in new_games]
             
             # Initialize parser
             from src.parser import Parser
@@ -203,6 +211,41 @@ def main():
                             print(f"✅ Successfully parsed and saved game {table_id}")
                             print(f"   Players: {len(game_data.players)}, Moves: {len(game_data.moves)}, ELO: {'✅' if game_data.metadata.get('elo_data_included', False) else '❌'}")
                             
+                            # Find the original game data for this table_id
+                            original_game = next((g for g in new_games if g['table_id'] == table_id), None)
+                            if original_game:
+                                # Extract player information from parsed data
+                                players_info = []
+                                # game_data.players is a dictionary with player_id as keys and Player objects as values
+                                if hasattr(game_data, 'players') and isinstance(game_data.players, dict):
+                                    for player_id, player_obj in game_data.players.items():
+                                        players_info.append({
+                                            'player_id': player_obj.player_id,
+                                            'name': player_obj.player_name,
+                                            'score': player_obj.final_vp
+                                        })
+                                else:
+                                    # Fallback for different data structure
+                                    for player in game_data.players:
+                                        players_info.append({
+                                            'player_id': getattr(player, 'player_id', None),
+                                            'name': getattr(player, 'player_name', getattr(player, 'name', None)),
+                                            'score': getattr(player, 'final_vp', getattr(player, 'score', None))
+                                        })
+                                
+                                # Add to registry
+                                games_registry.add_game(
+                                    table_id=table_id,
+                                    raw_datetime=original_game['raw_datetime'],
+                                    parsed_datetime=original_game['parsed_datetime'],
+                                    players=players_info
+                                )
+                                print(f"📋 Added game {table_id} to master registry")
+                                
+                                # Save registry immediately after each game
+                                games_registry.save_registry()
+                                print(f"💾 Registry saved with {games_registry.get_stats()['total_games']} total games")
+                            
                         else:
                             print(f"❌ Missing HTML files for game {table_id}")
                             parsing_results.append({
@@ -247,7 +290,6 @@ def main():
             print(f"   ❌ Failed: {failed_scrapes}")
             print(f"   ✅ Successfully parsed: {successful_parses}")
             
-            # Create clean scraping summary (without large HTML content)
             clean_scraping_results = []
             for result in scraping_results:
                 clean_result = {
@@ -256,12 +298,10 @@ def main():
                     'success': result['success']
                 }
                 
-                # Add skip information if present
                 if result.get('skipped', False):
                     clean_result['skipped'] = True
                     clean_result['skip_reason'] = result.get('skip_reason', 'unknown')
                 
-                # Add table data summary without HTML content
                 if 'table_data' in result and result['table_data']:
                     clean_result['table_data'] = {
                         'url': result['table_data'].get('url'),
@@ -270,7 +310,6 @@ def main():
                         'html_length': result['table_data'].get('html_length', 0)
                     }
                 
-                # Add replay data summary without HTML content
                 if 'replay_data' in result and result['replay_data']:
                     clean_result['replay_data'] = {
                         'url': result['replay_data'].get('url'),
@@ -327,6 +366,11 @@ def main():
                     print(f"\nGame {result['table_id']}: ⏭️  Skipped - {skip_reason}")
                 else:
                     print(f"\nGame {result['table_id']}: ❌ Failed - {result.get('error', 'Unknown error')}")
+            
+            # Save the updated registry
+            print(f"\n💾 Saving updated master games registry...")
+            games_registry.save_registry()
+            games_registry.print_stats()
             
         else:
             print("❌ No table IDs found. This could be due to:")
