@@ -1,6 +1,7 @@
 """
 Test script for scraping player game history
 """
+import argparse
 import logging
 import json
 import os
@@ -20,6 +21,14 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Test the player game history scraping functionality"""
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Scrape BGA Terraforming Mars game history')
+    parser.add_argument('--retry-checked-games', action='store_true',
+                       help='Retry games that have been previously checked but not successfully scraped (default: skip all previously checked games)')
+    args = parser.parse_args()
+    
+    retry_checked_games = args.retry_checked_games
     
     # Try to import config
     try:
@@ -107,19 +116,48 @@ def main():
             # Save results to file
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
-            # Filter out already scraped games
-            print(f"\n🔍 Checking for already scraped games...")
-            new_games = games_registry.filter_new_games(games_data)
-            already_scraped = len(games_data) - len(new_games)
+            # Add games to registry based on retry setting
+            print(f"\n📝 Adding games to registry (retry mode: {'ON' if retry_checked_games else 'OFF'})...")
+            games_added = 0
+            for game in games_data:
+                table_id = game['table_id']
+                if retry_checked_games or not games_registry.is_game_checked(table_id):
+                    # Extract player IDs if available (might not be available from history scraping)
+                    player_ids = []  # Will be populated during actual scraping
+                    
+                    games_registry.add_game_check(
+                        table_id=table_id,
+                        raw_datetime=game['raw_datetime'],
+                        parsed_datetime=game['parsed_datetime'],
+                        players=player_ids,
+                        is_arena_mode=True  # Assume arena mode since we're filtering for it
+                    )
+                    games_added += 1
             
-            if already_scraped > 0:
-                print(f"⏭️  Found {already_scraped} games already in registry - skipping duplicates")
+            # Save registry after adding all games
+            games_registry.save_registry()
+            print(f"📋 Added {games_added} games to registry")
+            
+            # Filter games based on retry setting
+            if retry_checked_games:
+                print(f"\n🔍 Retry mode: Checking for already scraped games...")
+                new_games = games_registry.filter_new_games(games_data)  # Only skip scraped
+                filter_type = "scraped"
+            else:
+                print(f"\n🔍 Standard mode: Checking for already checked games...")
+                new_games = games_registry.filter_unchecked_games(games_data)  # Skip all checked
+                filter_type = "checked"
+            
+            already_processed = len(games_data) - len(new_games)
+            
+            if already_processed > 0:
+                print(f"⏭️  Found {already_processed} games already {filter_type} - skipping")
                 print(f"📋 {len(new_games)} new games to process")
             else:
-                print(f"📋 All {len(games_data)} games are new - proceeding with full scraping")
+                print(f"📋 All {len(games_data)} games are new - proceeding with full processing")
             
             if not new_games:
-                print("✅ No new games to scrape - all games already processed!")
+                print(f"✅ No new games to process - all games already {filter_type}!")
                 games_registry.print_stats()
                 return
            
@@ -151,12 +189,20 @@ def main():
                     if scraping_result.get('success', False):
                         print(f"✅ Successfully scraped game {table_id}")
                         
+                        # Mark game as scraped in registry
+                        games_registry.mark_game_scraped(table_id)
+                        
                         # Parse immediately after scraping
                         print(f"Parsing game {table_id}...")
                     elif scraping_result.get('skipped', False):
                         skip_reason = scraping_result.get('skip_reason', 'unknown')
                         if skip_reason == 'not_arena_mode':
                             print(f"⏭️  Skipped game {table_id} - Not Arena mode")
+                            # Update arena mode status in registry
+                            if games_registry.is_game_checked(table_id):
+                                game_info = games_registry.get_game_info(table_id)
+                                if game_info:
+                                    game_info['is_arena_mode'] = False
                         elif skip_reason == 'not_arena_season_21':
                             print(f"⏭️  Skipped game {table_id} - Outside Arena season 21 date range")
                         else:
@@ -172,6 +218,9 @@ def main():
                         continue  # Skip to next game
                     else:
                         print(f"✅ Successfully scraped game {table_id}")
+                        
+                        # Mark game as scraped in registry
+                        games_registry.mark_game_scraped(table_id)
                         
                         # Parse immediately after scraping
                         print(f"Parsing game {table_id}...")
@@ -211,40 +260,33 @@ def main():
                             print(f"✅ Successfully parsed and saved game {table_id}")
                             print(f"   Players: {len(game_data.players)}, Moves: {len(game_data.moves)}, ELO: {'✅' if game_data.metadata.get('elo_data_included', False) else '❌'}")
                             
-                            # Find the original game data for this table_id
-                            original_game = next((g for g in new_games if g['table_id'] == table_id), None)
-                            if original_game:
-                                # Extract player information from parsed data
-                                players_info = []
-                                # game_data.players is a dictionary with player_id as keys and Player objects as values
-                                if hasattr(game_data, 'players') and isinstance(game_data.players, dict):
-                                    for player_id, player_obj in game_data.players.items():
-                                        players_info.append({
-                                            'player_id': player_obj.player_id,
-                                            'name': player_obj.player_name,
-                                            'score': player_obj.final_vp
-                                        })
-                                else:
-                                    # Fallback for different data structure
-                                    for player in game_data.players:
-                                        players_info.append({
-                                            'player_id': getattr(player, 'player_id', None),
-                                            'name': getattr(player, 'player_name', getattr(player, 'name', None)),
-                                            'score': getattr(player, 'final_vp', getattr(player, 'score', None))
-                                        })
-                                
-                                # Add to registry
-                                games_registry.add_game(
-                                    table_id=table_id,
-                                    raw_datetime=original_game['raw_datetime'],
-                                    parsed_datetime=original_game['parsed_datetime'],
-                                    players=players_info
-                                )
-                                print(f"📋 Added game {table_id} to master registry")
-                                
-                                # Save registry immediately after each game
-                                games_registry.save_registry()
-                                print(f"💾 Registry saved with {games_registry.get_stats()['total_games']} total games")
+                            # Mark game as parsed in registry
+                            games_registry.mark_game_parsed(table_id)
+                            
+                            # Update player information in registry
+                            if games_registry.is_game_checked(table_id):
+                                game_info = games_registry.get_game_info(table_id)
+                                if game_info:
+                                    # Extract player IDs from parsed data
+                                    player_ids = []
+                                    if hasattr(game_data, 'players') and isinstance(game_data.players, dict):
+                                        for player_id, player_obj in game_data.players.items():
+                                            player_ids.append(str(player_obj.player_id))
+                                    else:
+                                        # Fallback for different data structure
+                                        for player in game_data.players:
+                                            pid = getattr(player, 'player_id', None)
+                                            if pid:
+                                                player_ids.append(str(pid))
+                                    
+                                    # Update players in registry
+                                    game_info['players'] = player_ids
+                            
+                            print(f"📋 Updated game {table_id} in master registry")
+                            
+                            # Save registry immediately after each game
+                            games_registry.save_registry()
+                            print(f"💾 Registry saved with {games_registry.get_stats()['total_games']} total games")
                             
                         else:
                             print(f"❌ Missing HTML files for game {table_id}")
