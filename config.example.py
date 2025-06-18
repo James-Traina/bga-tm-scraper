@@ -6,18 +6,6 @@ TEST_URLS = [
     "https://boardgamearena.com/archive/replay/REPLAY_ID/?table=TABLE_ID&player=PLAYER_ID&comments=PLAYER_ID"
 ]
 
-# Authentication - Extract these from your browser's developer tools
-# After logging into BoardGameArena, go to Developer Tools > Application > Cookies
-# Copy the values for these cookies:
-BGA_COOKIES = {
-    'PHPSESSID': 'your_session_id_here',
-    'TournoiEnLigne_sso_id': 'your_sso_id_here',
-    'TournoiEnLigne_sso_user': 'your_sso_user_here',
-    'TournoiEnLigneid': 'your_id_here',
-    'TournoiEnLigneidt': 'your_idt_here',
-    'TournoiEnLignetk': 'your_tk_here',
-    'TournoiEnLignetkt': 'your_tkt_here'
-}
 
 # Request settings
 REQUEST_DELAY = 2  # Seconds between requests
