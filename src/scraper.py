@@ -548,6 +548,21 @@ class TMScraper:
             # Check if we got an error page
             page_source = self.driver.page_source
             
+            # Check for replay limit reached
+            if self._check_replay_limit_reached(page_source):
+                logger.warning(f"Replay limit reached when accessing {url}")
+                print("🚫 You have reached your daily replay limit!")
+                print("   BGA has daily limits on replay access to prevent server overload.")
+                print("   Please try again tomorrow or wait for the limit to reset.")
+                return {
+                    'replay_id': replay_id,
+                    'url': url,
+                    'scraped_at': datetime.now().isoformat(),
+                    'error': 'replay_limit_reached',
+                    'limit_reached': True,
+                    'html_length': len(page_source)
+                }
+            
             # Check for authentication errors and retry once
             if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
                 logger.warning("Authentication error detected, attempting re-authentication...")
@@ -1250,6 +1265,69 @@ class TMScraper:
             print("⚠️  No hybrid session available - falling back to manual login")
             return self.login_to_bga()
     
+    def _check_replay_limit_reached(self, page_source: str) -> bool:
+        """
+        Check if the replay limit has been reached based on page content
+        
+        Args:
+            page_source: HTML content of the page
+            
+        Returns:
+            bool: True if replay limit reached, False otherwise
+        """
+        try:
+            # Convert to lowercase for case-insensitive matching
+            page_content = page_source.lower()
+            
+            # Check for the specific limit message patterns
+            limit_indicators = [
+                'you have reached a limit (replay)',
+                'you have reached a limit',
+                'reached a limit (replay)',
+                'reached a limit',
+                'replay limit',
+                'limit reached',
+                'daily replay limit'
+            ]
+            
+            for indicator in limit_indicators:
+                if indicator in page_content:
+                    logger.info(f"Replay limit detected: found '{indicator}' in page content")
+                    return True
+            
+            # Also check for the limit notification in structured content
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(page_source, 'html.parser')
+                
+                # Look for notification elements that might contain limit messages
+                notification_selectors = [
+                    'div.notification',
+                    'div.alert',
+                    'div.error',
+                    'div.warning',
+                    '.limit-message',
+                    '[class*="limit"]',
+                    '[class*="notification"]'
+                ]
+                
+                for selector in notification_selectors:
+                    elements = soup.select(selector)
+                    for element in elements:
+                        element_text = element.get_text().lower()
+                        if any(indicator in element_text for indicator in limit_indicators):
+                            logger.info(f"Replay limit detected in notification element: {element_text[:100]}")
+                            return True
+                
+            except Exception as e:
+                logger.debug(f"Error parsing HTML for limit detection: {e}")
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error checking replay limit: {e}")
+            return False
+
     def _check_login_status(self) -> bool:
         """Check if we're still logged into BGA"""
         try:

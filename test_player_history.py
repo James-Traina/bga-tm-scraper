@@ -182,6 +182,25 @@ def main():
                 if scraping_result:
                     scraping_results.append(scraping_result)
                     
+                    # Check for replay limit reached
+                    if scraping_result.get('replay_data', {}).get('limit_reached', False):
+                        print("🚫 REPLAY LIMIT REACHED!")
+                        print("   Stopping scraping process to respect BGA's daily limits.")
+                        print("   Please try again tomorrow when the limit resets.")
+                        
+                        # Mark this in parsing results
+                        parsing_results.append({
+                            'table_id': table_id,
+                            'success': False,
+                            'limit_reached': True,
+                            'error': 'replay_limit_reached'
+                        })
+                        
+                        # Save progress and exit gracefully
+                        print(f"\n💾 Saving progress before stopping...")
+                        games_registry.save_registry()
+                        break  # Exit the scraping loop
+                    
                     # Check if this was a successful scrape or a skip
                     if scraping_result.get('success', False):
                         print(f"✅ Successfully scraped game {table_id}")
