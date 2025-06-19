@@ -24,7 +24,7 @@ class EloData:
 @dataclass
 class GameState:
     """Represents the game state at a specific point in time"""
-    move_index: int
+    move_number: int
     generation: int
     temperature: int
     oxygen: int
@@ -151,7 +151,7 @@ class Parser:
         
         # Build final game state
         final_state = moves_with_states[-1].game_state if moves_with_states else GameState(
-            move_index=0, generation=1, temperature=-30, oxygen=0, oceans=0,
+            move_number=0, generation=1, temperature=-30, oxygen=0, oceans=0,
             player_vp={}, milestones={}, awards={}
         )
         
@@ -380,7 +380,7 @@ class Parser:
                 logger.debug(f"Move {move_number}: Found player_id = {player_id}")
             else:
                 logger.debug(f"Move {move_number}: No player ID found in gamelogs args")
-                return "Unknown", "unknown"
+                return None, None
             
             # Try to find the player name from the name_to_id mapping
             for player_name, mapped_id in name_to_id.items():
@@ -678,15 +678,15 @@ class Parser:
         # Track the last known VP data to carry forward when no new data is available
         last_vp_data = dict(default_vp_data)
         
-        # Create a mapping from move_id to VP data for proper correlation
-        vp_by_move_id = {}
+        # Create a mapping from move_number to VP data for proper correlation
+        vp_by_move_number = {}
         for vp_entry in vp_progression:
-            move_id = vp_entry.get('move_id')
-            if move_id:
-                # Convert move_id to string for consistent matching
-                vp_by_move_id[str(move_id)] = vp_entry.get('vp_data', {})
+            move_number = vp_entry.get('move_number')
+            if move_number:
+                # Convert move_number to string for consistent matching
+                vp_by_move_number[str(move_number)] = vp_entry.get('vp_data', {})
         
-        logger.info(f"Built VP mapping for {len(vp_by_move_id)} moves")
+        logger.info(f"Built VP mapping for {len(vp_by_move_number)} moves")
         
         # Process each move and build game state
         for i, move in enumerate(moves):
@@ -729,8 +729,8 @@ class Parser:
                         'timestamp': move.timestamp
                     }
             
-            # Get VP data for this move by matching move_number with move_id
-            move_vp_data = vp_by_move_id.get(str(move.move_number), {})
+            # Get VP data for this move by matching move_number
+            move_vp_data = vp_by_move_number.get(str(move.move_number), {})
             
             # Ensure VP data is always present
             if move_vp_data:
@@ -750,7 +750,7 @@ class Parser:
             
             # Create game state (without resource/production tracking)
             game_state = GameState(
-                move_index=move.move_number - 1,  # Use move_number - 1 for 0-based indexing
+                move_number=move.move_number,
                 generation=current_generation,
                 temperature=current_temp,
                 oxygen=current_oxygen,
@@ -1144,8 +1144,7 @@ class Parser:
             combined_total = sum(data.get('total', 0) for data in scoring_data.values())
             
             vp_entry = {
-                'move_index': i,
-                'move_id': entry.get('move_id'),
+                'move_number': entry.get('move_id'),
                 'time': entry.get('time'),
                 'combined_total': combined_total,
                 'vp_data': scoring_data
@@ -1225,7 +1224,7 @@ class Parser:
                 combined_total = sum(data.get('total', 0) for data in vp_data.values())
                 
                 vp_entry = {
-                    'move_index': i,
+                    'move_number': i + 1,  # Convert 0-based index to 1-based move number
                     'combined_total': combined_total,
                     'vp_data': vp_data
                 }
@@ -1244,7 +1243,7 @@ class Parser:
         for move in moves:
             if move.game_state:
                 progression.append({
-                    'move_index': move.game_state.move_index,
+                    'move_number': move.game_state.move_number,
                     'generation': move.game_state.generation,
                     'temperature': move.game_state.temperature,
                     'oxygen': move.game_state.oxygen,
@@ -1749,7 +1748,7 @@ class Parser:
                 if not move_entry:
                     # Even if no move entry, store current state to maintain progression
                     tracking_entry = {
-                        'move_index': move_index,
+                        'move_number': move_index,
                         'data': {pid: dict(data) for pid, data in player_data.items()}
                     }
                     tracking_progression.append(tracking_entry)
@@ -1808,7 +1807,7 @@ class Parser:
                 
                 # Store snapshot of current state (includes all previous values + any updates from this move)
                 tracking_entry = {
-                    'move_index': move_index,
+                    'move_number': move_index,
                     'data': {pid: dict(data) for pid, data in player_data.items()}
                 }
                 tracking_progression.append(tracking_entry)
@@ -1883,11 +1882,11 @@ class Parser:
         """Update GameState objects with comprehensive tracking data"""
         logger.info(f"Updating {len(moves)} game states with tracking data")
         
-        # Create a mapping from move index to tracking data
+        # Create a mapping from move number to tracking data
         tracking_by_move = {}
         for entry in tracking_progression:
-            move_index = entry['move_index']
-            tracking_by_move[move_index] = entry['data']
+            move_number = entry['move_number']
+            tracking_by_move[move_number] = entry['data']
         
         # Update each move's game state
         for move in moves:
