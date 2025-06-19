@@ -7,6 +7,7 @@ import json
 import os
 import csv
 import re
+import time
 from datetime import datetime
 
 from src.bga_hybrid_session import BGAHybridSession
@@ -995,7 +996,7 @@ def process_single_player(player_id, retry_checked_games, no_scrape, filter_aren
     scraper = TMScraper(
         chromedriver_path=chromedriver_path,
         request_delay=request_delay,
-        headless=False  # Keep browser visible for manual login
+        headless=True  # Keep browser visible for manual login
     )
     
     try:
@@ -1010,9 +1011,136 @@ def process_single_player(player_id, retry_checked_games, no_scrape, filter_aren
         
         # Continue with normal browser-based processing...
         print(f"\n🎯 Starting to scrape game history for player {player_id}...")
-        print("Note: Browser mode processing would continue here...")
         
-        # For now, just return success since the main focus was on session-only retry mode
+        # Scrape player's game history to discover all games
+        games_data = scraper.scrape_player_game_history(
+            player_id=player_id,
+            max_clicks=100,
+            filter_arena_season_21=filter_arena_season_21
+        )
+        
+        if not games_data:
+            print(f"❌ No games found for player {player_id}")
+            return None
+        
+        print(f"✅ Discovered {len(games_data)} games for player {player_id}")
+        
+        # Process discovered games and add to registry
+        arena_games_found = 0
+        games_added_to_registry = 0
+        
+        for i, game_info in enumerate(games_data, 1):
+            table_id = game_info['table_id']
+            raw_datetime = game_info['raw_datetime']
+            parsed_datetime = game_info['parsed_datetime']
+            
+            print(f"Processing game {i}/{len(games_data)}: {table_id}")
+            
+            try:
+                if no_scrape:
+                    # In no-scrape mode, just scrape table page to check Arena mode
+                    result = scraper.scrape_table_only(table_id, player_id, save_raw=True, raw_data_dir=raw_data_dir)
+                    
+                    if result and result.get('success'):
+                        is_arena_mode = result.get('arena_mode', False)
+                        player_ids = result.get('player_ids', [])
+                        version = result.get('version')
+                        
+                        if is_arena_mode:
+                            arena_games_found += 1
+                            print(f"✅ Game {table_id} is Arena mode")
+                        else:
+                            print(f"⏭️  Game {table_id} is not Arena mode - skipping")
+                        
+                        # Add to registry regardless of Arena mode (for tracking)
+                        games_registry.add_game_check(
+                            table_id=table_id,
+                            raw_datetime=raw_datetime,
+                            parsed_datetime=parsed_datetime,
+                            players=player_ids,
+                            is_arena_mode=is_arena_mode,
+                            version=version,
+                            player_perspective=player_id
+                        )
+                        games_added_to_registry += 1
+                        
+                    else:
+                        print(f"❌ Failed to process game {table_id}")
+                        
+                else:
+                    # In normal mode, scrape both table and replay
+                    result = scraper.scrape_table_and_replay(table_id, player_id, save_raw=True, raw_data_dir=raw_data_dir)
+                    
+                    if result and result.get('success'):
+                        is_arena_mode = result.get('arena_mode', False)
+                        version = result.get('version')
+                        
+                        if is_arena_mode:
+                            arena_games_found += 1
+                            print(f"✅ Game {table_id} is Arena mode - scraped successfully")
+                            
+                            # Extract player IDs from scraped data
+                            player_ids = []
+                            if result.get('table_data') and result['table_data'].get('html_content'):
+                                player_ids = scraper.extract_player_ids_from_table(result['table_data']['html_content'])
+                            
+                            # Add to registry
+                            games_registry.add_game_check(
+                                table_id=table_id,
+                                raw_datetime=raw_datetime,
+                                parsed_datetime=parsed_datetime,
+                                players=player_ids,
+                                is_arena_mode=True,
+                                version=version,
+                                player_perspective=player_id
+                            )
+                            
+                            # Mark as scraped
+                            games_registry.mark_game_scraped(table_id, player_perspective=player_id)
+                            games_added_to_registry += 1
+                            
+                        else:
+                            print(f"⏭️  Game {table_id} is not Arena mode - skipped")
+                    
+                    elif result and result.get('skipped'):
+                        print(f"⏭️  Game {table_id} was skipped: {result.get('skip_reason', 'unknown')}")
+                    else:
+                        print(f"❌ Failed to scrape game {table_id}")
+                
+                # Add delay between games
+                if i < len(games_data):
+                    time.sleep(request_delay)
+                    
+            except Exception as e:
+                print(f"❌ Error processing game {table_id}: {e}")
+                continue
+        
+        # Save updated registry
+        games_registry.save_registry()
+        
+        # Create player summary
+        summary_data = {
+            'player_id': player_id,
+            'scraped_at': datetime.now().isoformat(),
+            'total_games_found': len(games_data),
+            'total_games_discovered': len(games_data),
+            'arena_games_found': arena_games_found,
+            'games_added_to_registry': games_added_to_registry,
+            'discovery_completed': True,
+            'discovery_completed_at': datetime.now().isoformat(),
+            'successful_scrapes': arena_games_found if not no_scrape else 0,
+            'mode': 'no_scrape' if no_scrape else 'normal',
+            'games_data': games_data
+        }
+        
+        # Save player summary
+        save_player_summary(player_id, summary_data)
+        
+        print(f"\n✅ Player {player_id} processing complete:")
+        print(f"   📊 Total games discovered: {len(games_data)}")
+        print(f"   🎯 Arena games found: {arena_games_found}")
+        print(f"   📝 Games added to registry: {games_added_to_registry}")
+        
         return True
         
     except Exception as e:

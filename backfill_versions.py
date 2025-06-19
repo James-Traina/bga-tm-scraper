@@ -83,7 +83,7 @@ def main():
     scraper = TMScraper(
         chromedriver_path=CHROMEDRIVER_PATH,
         request_delay=REQUEST_DELAY,
-        headless=False  # Keep browser visible for login
+        headless=True  # Keep browser visible for login
     )
     
     try:
