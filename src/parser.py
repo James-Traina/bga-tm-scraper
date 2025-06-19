@@ -59,20 +59,9 @@ class Move:
     card_cost: Optional[int] = None
     tile_placed: Optional[str] = None
     tile_location: Optional[str] = None
-    resource_changes: Dict[str, int] = None
-    production_changes: Dict[str, int] = None
-    parameter_changes: Dict[str, int] = None  # temperature, oxygen, oceans
     
     # Game state after this move
     game_state: Optional[GameState] = None
-    
-    def __post_init__(self):
-        if self.resource_changes is None:
-            self.resource_changes = {}
-        if self.production_changes is None:
-            self.production_changes = {}
-        if self.parameter_changes is None:
-            self.parameter_changes = {}
 
 @dataclass
 class Player:
@@ -331,9 +320,6 @@ class Parser:
             card_cost = self._extract_card_cost(log_entries)
             tile_placed, tile_location = self._extract_tile_placement(log_entries)
             
-            # Extract parameter changes (resource/production now handled by comprehensive tracking)
-            parameter_changes = self._extract_parameter_changes_detailed(log_entries)
-            
             move = Move(
                 move_number=move_number,
                 timestamp=timestamp,
@@ -344,10 +330,7 @@ class Parser:
                 card_played=card_played,
                 card_cost=card_cost,
                 tile_placed=tile_placed,
-                tile_location=tile_location,
-                resource_changes={},  # Now handled by comprehensive tracking
-                production_changes={},  # Now handled by comprehensive tracking
-                parameter_changes=parameter_changes
+                tile_location=tile_location
             )
             
             return move
@@ -650,19 +633,21 @@ class Parser:
         
         # Process each move and build game state
         for i, move in enumerate(moves):
-            # Update parameters
-            if 'temperature' in move.parameter_changes:
-                current_temp = move.parameter_changes['temperature']
-            if 'oxygen' in move.parameter_changes:
-                current_oxygen = move.parameter_changes['oxygen']
-            if 'oceans' in move.parameter_changes:
-                current_oceans = move.parameter_changes['oceans']
-            
             # Update generation
             if 'New generation' in move.description:
                 gen_match = re.search(r'New generation (\d+)', move.description)
                 if gen_match:
                     current_generation = int(gen_match.group(1))
+            
+            # Extract parameter changes from move description if needed
+            parameter_changes = self._extract_parameter_changes_detailed([])  # Pass empty list since we're extracting from description
+            if parameter_changes:
+                if 'temperature' in parameter_changes:
+                    current_temp = parameter_changes['temperature']
+                if 'oxygen' in parameter_changes:
+                    current_oxygen = parameter_changes['oxygen']
+                if 'oceans' in parameter_changes:
+                    current_oceans = parameter_changes['oceans']
             
             # Update milestone and award tracking
             if move.action_type == 'claim_milestone':
