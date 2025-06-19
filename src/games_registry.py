@@ -17,7 +17,7 @@ class GamesRegistry:
     def __init__(self, registry_path: str = "data/processed/games.csv"):
         self.registry_path = registry_path
         self.fieldnames = [
-            'TableId', 'RawDatetime', 'ParsedDatetime', 'Players', 
+            'TableId', 'PlayerPerspective', 'RawDatetime', 'ParsedDatetime', 'Players', 
             'IsArenaMode', 'Version', 'ScrapedAt', 'ParsedAt'
         ]
         self.registry_data = {}
@@ -41,7 +41,8 @@ class GamesRegistry:
                             'is_arena_mode': bool(int(row['IsArenaMode'])) if row['IsArenaMode'] else False,
                             'version': row.get('Version', '') if row.get('Version') else None,
                             'scraped_at': row['ScrapedAt'] if row['ScrapedAt'] else None,
-                            'parsed_at': row['ParsedAt'] if row['ParsedAt'] else None
+                            'parsed_at': row['ParsedAt'] if row['ParsedAt'] else None,
+                            'player_perspective': row.get('PlayerPerspective', '') if row.get('PlayerPerspective') else None
                         }
                         self.registry_data[table_id] = processed_row
             except (IOError, csv.Error) as e:
@@ -76,12 +77,14 @@ class GamesRegistry:
                     'IsArenaMode': '1' if game_data['is_arena_mode'] else '0',
                     'Version': game_data.get('version', '') if game_data.get('version') else '',
                     'ScrapedAt': game_data['scraped_at'] if game_data['scraped_at'] else '',
-                    'ParsedAt': game_data['parsed_at'] if game_data['parsed_at'] else ''
+                    'ParsedAt': game_data['parsed_at'] if game_data['parsed_at'] else '',
+                    'PlayerPerspective': game_data.get('player_perspective', '') if game_data.get('player_perspective') else ''
                 }
                 writer.writerow(csv_row)
     
     def add_game_check(self, table_id: str, raw_datetime: str, parsed_datetime: str, 
-                      players: List[str], is_arena_mode: bool = True, version: Optional[str] = None) -> None:
+                      players: List[str], is_arena_mode: bool = True, version: Optional[str] = None, 
+                      player_perspective: Optional[str] = None) -> None:
         """Add a game check entry (called when encountering any game, even if skipped)"""
         game_entry = {
             'table_id': table_id,
@@ -91,18 +94,22 @@ class GamesRegistry:
             'is_arena_mode': is_arena_mode,
             'version': version,
             'scraped_at': None,
-            'parsed_at': None
+            'parsed_at': None,
+            'player_perspective': player_perspective
         }
         
         self.registry_data[table_id] = game_entry
     
-    def mark_game_scraped(self, table_id: str, scraped_at: Optional[str] = None) -> None:
+    def mark_game_scraped(self, table_id: str, scraped_at: Optional[str] = None, 
+                         player_perspective: Optional[str] = None) -> None:
         """Mark a game as successfully scraped"""
         if scraped_at is None:
             scraped_at = datetime.now().isoformat()
         
         if table_id in self.registry_data:
             self.registry_data[table_id]['scraped_at'] = scraped_at
+            if player_perspective:
+                self.registry_data[table_id]['player_perspective'] = player_perspective
         else:
             # If game wasn't checked before, create minimal entry
             self.registry_data[table_id] = {
@@ -112,7 +119,8 @@ class GamesRegistry:
                 'players': [],
                 'is_arena_mode': True,  # Default assumption
                 'scraped_at': scraped_at,
-                'parsed_at': None
+                'parsed_at': None,
+                'player_perspective': player_perspective
             }
     
     def mark_game_parsed(self, table_id: str, parsed_at: Optional[str] = None) -> None:
@@ -131,7 +139,8 @@ class GamesRegistry:
                 'players': [],
                 'is_arena_mode': True,  # Default assumption
                 'scraped_at': None,
-                'parsed_at': parsed_at
+                'parsed_at': parsed_at,
+                'player_perspective': None
             }
     
     def is_game_checked(self, table_id: str) -> bool:
@@ -188,7 +197,8 @@ class GamesRegistry:
                 'parsed_datetime': parsed_datetime,
                 'players': player_ids,
                 'scraped_at': datetime.now().isoformat(),
-                'parsed_at': datetime.now().isoformat()  # Assume parsed if using legacy method
+                'parsed_at': datetime.now().isoformat(),  # Assume parsed if using legacy method
+                'player_perspective': scraped_by_player
             })
         else:
             # Create new entry
@@ -199,7 +209,8 @@ class GamesRegistry:
                 'players': player_ids,
                 'is_arena_mode': True,  # Default assumption for legacy calls
                 'scraped_at': datetime.now().isoformat(),
-                'parsed_at': datetime.now().isoformat()
+                'parsed_at': datetime.now().isoformat(),
+                'player_perspective': scraped_by_player
             }
             self.registry_data[table_id] = game_entry
     
@@ -218,7 +229,8 @@ class GamesRegistry:
                 'players': [],
                 'is_arena_mode': True,
                 'scraped_at': None,
-                'parsed_at': None
+                'parsed_at': None,
+                'player_perspective': scraped_by_player
             }
             self.registry_data[table_id] = game_entry
     
@@ -236,7 +248,8 @@ class GamesRegistry:
                 'is_arena_mode': True,
                 'version': version,
                 'scraped_at': None,
-                'parsed_at': None
+                'parsed_at': None,
+                'player_perspective': None
             }
 
     def get_game_info(self, table_id: str) -> Optional[Dict]:
