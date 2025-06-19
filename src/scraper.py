@@ -403,16 +403,10 @@ class TMScraper:
                 'scraped_at': datetime.now().isoformat(),
                 'html_length': len(page_source),
                 'html_content': page_source,
-                'players_found': [],
                 'elo_data_found': False
             }
             
-            # Look for player information and ELO data
-            player_elements = soup.find_all('span', class_='playername')
-            for player_elem in player_elements:
-                player_name = player_elem.get_text().strip()
-                if player_name:
-                    table_data['players_found'].append(player_name)
+            # Look for ELO data
             
             # Check if ELO data is present
             if 'rankdetails' in page_source or 'winpoints' in page_source:
