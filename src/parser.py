@@ -97,7 +97,6 @@ class GameData:
     final_state: GameState
     
     # Game progression data
-    vp_progression: List[Dict[str, Any]]
     parameter_progression: List[Dict[str, Any]]
     
     # Analysis metadata
@@ -174,7 +173,6 @@ class Parser:
             players=players_info,
             moves=moves_with_states,
             final_state=final_state,
-            vp_progression=vp_progression,
             parameter_progression=parameter_progression,
             metadata=metadata
         )
@@ -1429,15 +1427,15 @@ class Parser:
 
     def _extract_metadata(self, soup: BeautifulSoup, html_content: str, moves: List[Move]) -> Dict[str, Any]:
         """Extract metadata about the parsing process"""
+        # Calculate total moves as the maximum move_number
+        total_moves = 0
+        if moves:
+            total_moves = max(move.move_number for move in moves)
+        
         return {
             'parsed_at': datetime.now().isoformat(),
-            'total_moves': len(moves),
-            'html_length': len(html_content),
-            'parser_version': '1.0.0',
-            'features_extracted': [
-                'moves', 'game_states', 'vp_progression', 
-                'parameter_progression', 'player_data', 'comprehensive_tracking'
-            ]
+            'total_moves': total_moves,
+            'html_length': len(html_content)
         }
 
     def _extract_tracker_dictionary_from_html(self, html_content: str) -> Dict[str, str]:
