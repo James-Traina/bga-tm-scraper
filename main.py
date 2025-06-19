@@ -9,7 +9,7 @@ import csv
 import re
 from datetime import datetime
 
-from src.bga_session import BGASession
+from src.bga_hybrid_session import BGAHybridSession
 
 # Setup logging with UTF-8 encoding to handle Unicode characters (emojis)
 logging.basicConfig(
@@ -201,7 +201,7 @@ def extract_version_from_gamereview_session(table_id, session):
     
     Args:
         table_id: BGA table ID
-        session: BGASession instance
+        session: BGAHybridSession instance
         
     Returns:
         str: Version number (e.g., "250505-1448") or None if not found
@@ -212,8 +212,11 @@ def extract_version_from_gamereview_session(table_id, session):
     try:
         print(f"🌐 Fetching gamereview page: {gamereview_url}")
         
+        # Get the underlying requests session from BGAHybridSession
+        requests_session = session.get_session()
+        
         # Fetch the gamereview page
-        response = session.get(gamereview_url, timeout=30)
+        response = requests_session.get(gamereview_url, timeout=30)
         response.raise_for_status()
         
         html_content = response.text
@@ -277,6 +280,52 @@ def get_current_site_version(session):
         response.raise_for_status()
         
         html_content = response.text
+        version = extract_version_with_multiple_patterns(html_content, "game_page")
+        
+        if version:
+            print(f"✅ Found current site version from game page: {version}")
+            return version
+        
+        print("⚠️  Could not find current site version")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Error getting current site version: {e}")
+        return None
+
+def get_current_site_version_browser(driver):
+    """
+    Get the current site version from BGA main page using browser
+    
+    Args:
+        driver: Selenium WebDriver instance
+        
+    Returns:
+        str: Current site version or None if not found
+    """
+    try:
+        print("🔍 Getting current site version from BGA using browser...")
+        
+        # Try to get version from main page
+        driver.get("https://boardgamearena.com")
+        import time
+        time.sleep(2)
+        
+        html_content = driver.page_source
+        
+        # Look for version in the main page using the same patterns
+        version = extract_version_with_multiple_patterns(html_content, "main_page")
+        
+        if version:
+            print(f"✅ Found current site version: {version}")
+            return version
+        
+        # Alternative: try to get version from any game page
+        print("🔍 Trying to get version from a game page...")
+        driver.get("https://boardgamearena.com/gamepanel?game=terraformingmars")
+        time.sleep(2)
+        
+        html_content = driver.page_source
         version = extract_version_with_multiple_patterns(html_content, "game_page")
         
         if version:
@@ -389,15 +438,24 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
         # Import credentials
         from config import BGA_EMAIL, BGA_PASSWORD, REQUEST_DELAY
         
-        # Initialize session
-        print("🔐 Initializing session-only mode (no browser)...")
-        session = BGASession(BGA_EMAIL, BGA_PASSWORD)
+        # Initialize hybrid session with headless Chrome
+        print("🔐 Initializing hybrid session (headless Chrome)...")
+        session = BGAHybridSession(
+            email=BGA_EMAIL,
+            password=BGA_PASSWORD,
+            chromedriver_path=None,  # Will be set from config
+            headless=True
+        )
+        
+        # Import chromedriver path from config
+        from config import CHROMEDRIVER_PATH
+        session.chromedriver_path = CHROMEDRIVER_PATH
         
         if not session.login():
-            print("❌ Session login failed")
+            print("❌ Hybrid session login failed")
             return [], []
         
-        print("✅ Session login successful!")
+        print("✅ Hybrid session login successful!")
         
         # Initialize parser
         from src.parser import Parser
@@ -552,34 +610,19 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                 if need_to_fetch:
                     # Construct replay URL
                     replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={table_id}&player={player_id}&comments={player_id}"
-                    print(f"🌐 Fetching replay via session: {replay_url}")
+                    print(f"🌐 Fetching replay via browser: {replay_url}")
                     
-                    # Fetch replay HTML directly with browser-like headers
-                    # Remove AJAX headers that might interfere with replay page access
-                    original_headers = session.session.headers.copy()
-                    session.session.headers.pop('X-Request-Token', None)
-                    session.session.headers.pop('X-Requested-With', None)
+                    # Get the browser driver from BGAHybridSession
+                    driver = session.get_driver()
                     
-                    # Add proper browser headers for replay page
-                    session.session.headers.update({
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                        'Accept-Language': 'en-US,en;q=0.5',
-                        'Accept-Encoding': 'gzip, deflate',
-                        'Upgrade-Insecure-Requests': '1',
-                        'Sec-Fetch-Dest': 'document',
-                        'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'same-origin'
-                    })
+                    # Navigate to replay page using browser
+                    driver.get(replay_url)
+                    import time
+                    time.sleep(3)  # Wait for page to load
                     
-                    try:
-                        response = session.get(replay_url, timeout=30)
-                        response.raise_for_status()
-                    finally:
-                        # Restore original headers
-                        session.session.headers = original_headers
-                    
-                    replay_html = response.text
-                    print(f"✅ Fetched replay HTML ({len(replay_html)} chars)")
+                    # Get the fully rendered HTML
+                    replay_html = driver.page_source
+                    print(f"✅ Fetched replay HTML via browser ({len(replay_html)} chars)")
                     
                     # Check for replay limit
                     if 'you have reached a limit' in replay_html.lower():
@@ -592,12 +635,22 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                         })
                         break
                     
+                    # Check for authentication errors
+                    if 'must be logged' in replay_html.lower():
+                        print("❌ Authentication error - session may have expired")
+                        parsing_results.append({
+                            'table_id': table_id,
+                            'success': False,
+                            'error': 'Authentication error'
+                        })
+                        continue
+                    
                     # Check for "Wrong siteversion" error
                     if 'wrong siteversion' in replay_html.lower() or 'fatalerror' in replay_html.lower():
                         print(f"⚠️  Wrong siteversion error with version {version}, trying to get current version...")
                         
-                        # Try to get the current version from the main site
-                        current_version = get_current_site_version(session)
+                        # Try to get the current version from the main site using browser
+                        current_version = get_current_site_version_browser(driver)
                         if current_version and current_version != version:
                             print(f"🔄 Retrying with current site version: {current_version}")
                             
@@ -606,14 +659,14 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                                 game_info['version'] = current_version
                                 games_registry.save_registry()
                             
-                            # Retry with current version
+                            # Retry with current version using browser
                             retry_url = f"https://boardgamearena.com/archive/replay/{current_version}/?table={table_id}&player={player_id}&comments={player_id}"
-                            print(f"🌐 Retrying with: {retry_url}")
+                            print(f"🌐 Retrying with browser: {retry_url}")
                             
-                            retry_response = session.get(retry_url, timeout=30)
-                            retry_response.raise_for_status()
+                            driver.get(retry_url)
+                            time.sleep(3)
                             
-                            replay_html = retry_response.text
+                            replay_html = driver.page_source
                             print(f"✅ Retry successful ({len(replay_html)} chars)")
                             
                             # Update the replay URL for logging
