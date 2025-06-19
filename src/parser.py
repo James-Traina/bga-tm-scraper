@@ -181,29 +181,48 @@ class Parser:
         return game_data
     
     def _extract_players_info(self, soup: BeautifulSoup, html_content: str) -> Dict[str, Player]:
-        """Extract comprehensive player information"""
-        # Get player names from span elements
-        player_names = []
-        player_elements = soup.find_all('span', class_='playername')
-        for elem in player_elements:
-            player_name = elem.get_text().strip()
-            if player_name and player_name not in player_names:
-                player_names.append(player_name)
+        """Extract comprehensive player information using gamelogs-first approach"""
+        # First, try to get player names from gamelogs (most reliable)
+        gamelogs = self._extract_g_gamelogs(html_content)
+        vp_data = self._extract_vp_data_from_html(html_content)
+        valid_player_ids = set(vp_data.keys())
         
-        # Fallback: Extract player names from move descriptions if no playername spans found
+        player_names = []
+        player_id_map = {}
+        
+        if gamelogs and valid_player_ids:
+            logger.info("Extracting player info using gamelogs-first approach")
+            # Extract player mapping directly from gamelogs
+            gamelogs_mapping = self._extract_player_mapping_from_gamelogs(gamelogs, valid_player_ids)
+            if gamelogs_mapping:
+                logger.info(f"Found complete gamelogs mapping: {gamelogs_mapping}")
+                player_names = list(gamelogs_mapping.keys())
+                player_id_map = gamelogs_mapping
+        
+        # Fallback: Get player names from HTML span elements if gamelogs approach failed
+        if not player_names:
+            logger.info("Gamelogs approach failed, falling back to HTML span extraction")
+            player_elements = soup.find_all('span', class_='playername')
+            for elem in player_elements:
+                player_name = elem.get_text().strip()
+                if player_name and player_name not in player_names:
+                    player_names.append(player_name)
+            
+            # Get player ID mapping using the improved method
+            if player_names:
+                player_id_map = self._extract_player_id_mapping(html_content, player_names)
+        
+        # Final fallback: Extract player names from move descriptions
         if not player_names:
             logger.info("No playername spans found, extracting from move descriptions")
             player_names = self._extract_player_names_from_moves(soup)
-        
-        # Get player ID mapping
-        player_id_map = self._extract_player_id_mapping(html_content, player_names)
-        
-        # Get VP data for final scores
-        vp_data = self._extract_vp_data_from_html(html_content)
+            if player_names:
+                player_id_map = self._extract_player_id_mapping(html_content, player_names)
         
         # Get corporations
         corporations = self._extract_corporations(soup)
         
+        # Build player objects
         players = {}
         for player_name in player_names:
             player_id = player_id_map.get(player_name, f"unknown_{len(players)}")
@@ -227,7 +246,7 @@ class Parser:
                 awards_funded=[]  # Will be populated from moves
             )
         
-        logger.info(f"Extracted {len(players)} players: {list(players.keys())}")
+        logger.info(f"Extracted {len(players)} players using gamelogs-first approach: {list(players.keys())}")
         return players
     
     def _extract_player_names_from_moves(self, soup: BeautifulSoup) -> List[str]:
@@ -1407,41 +1426,166 @@ class Parser:
         return {}
     
     def _extract_player_id_mapping(self, html_content: str, player_names: List[str]) -> Dict[str, str]:
-        """Extract player ID mapping - reusing existing logic"""
+        """Extract player ID mapping with optimized regex to prevent catastrophic backtracking"""
         player_id_map = {}
         
-        # Get valid player IDs from VP data
-        vp_data = self._extract_vp_data_from_html(html_content)
-        valid_player_ids = set(vp_data.keys())
-        
-        # Look for player board elements that might contain the mapping
-        for player in player_names:
-            patterns = [
-                rf'{re.escape(player)}[^0-9]*(\d{{8,}})',
-                rf'(\d{{8,}})[^a-zA-Z]*{re.escape(player)}',
-                rf'player[^>]*{re.escape(player)}[^0-9]*(\d{{8,}})',
-                rf'(\d{{8,}})[^>]*player[^>]*{re.escape(player)}',
-            ]
+        try:
+            # Get valid player IDs from VP data
+            vp_data = self._extract_vp_data_from_html(html_content)
+            valid_player_ids = set(vp_data.keys())
             
-            for pattern in patterns:
-                matches = re.findall(pattern, html_content, re.IGNORECASE)
-                if matches:
-                    for match in matches:
-                        if len(match) >= 8 and match in valid_player_ids:
-                            player_id_map[player] = match
-                            break
+            logger.info(f"Found {len(valid_player_ids)} valid player IDs: {valid_player_ids}")
+            
+            # First, try to get mapping from gamelogs (most reliable)
+            gamelogs = self._extract_g_gamelogs(html_content)
+            if gamelogs:
+                logger.info("Attempting to extract player mapping from gamelogs")
+                gamelogs_mapping = self._extract_player_mapping_from_gamelogs(gamelogs, valid_player_ids)
+                if gamelogs_mapping:
+                    logger.info(f"Found gamelogs mapping: {gamelogs_mapping}")
+                    # Update player_names to use the correct names from gamelogs
+                    gamelogs_names = list(gamelogs_mapping.keys())
+                    player_id_map.update(gamelogs_mapping)
                     
-                    if player in player_id_map:
-                        break
-        
-        # Fallback mapping if HTML-based mapping fails
-        if len(player_id_map) < len(player_names):
-            player_ids = sorted(valid_player_ids)
+                    # If we got a complete mapping from gamelogs, return it
+                    if len(player_id_map) == len(valid_player_ids):
+                        logger.info(f"Complete mapping from gamelogs: {player_id_map}")
+                        return player_id_map
+            
+            # If gamelogs didn't provide complete mapping, fall back to HTML-based search
+            # Use the original player_names passed in, but also try gamelogs names if available
+            names_to_try = list(player_names)
+            if 'gamelogs_names' in locals():
+                # Add gamelogs names that aren't already mapped
+                for name in gamelogs_names:
+                    if name not in player_id_map and name not in names_to_try:
+                        names_to_try.append(name)
+            
+            logger.info(f"Trying HTML-based mapping for names: {names_to_try}")
+            
+            # Look for player board elements that might contain the mapping
+            for player in names_to_try:
+                if player in player_id_map:
+                    continue
+                    
+                logger.debug(f"Searching for player ID mapping for: {player}")
+                
+                # Use more specific and efficient patterns to avoid catastrophic backtracking
+                patterns = [
+                    # Look for player name followed by digits within reasonable distance (max 100 chars)
+                    rf'{re.escape(player)}.{{0,100}}?(\d{{8,}})',
+                    # Look for digits followed by player name within reasonable distance
+                    rf'(\d{{8,}}).{{0,100}}?{re.escape(player)}',
+                    # Look in player board contexts
+                    rf'player_board.{{0,200}}?{re.escape(player)}.{{0,100}}?(\d{{8,}})',
+                    rf'(\d{{8,}}).{{0,100}}?player_board.{{0,200}}?{re.escape(player)}',
+                ]
+                
+                for i, pattern in enumerate(patterns):
+                    try:
+                        # Use a more targeted search by looking in smaller chunks
+                        matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+                        logger.debug(f"Pattern {i+1} for {player}: found {len(matches)} matches")
+                        
+                        if matches:
+                            for match in matches:
+                                match_id = match if isinstance(match, str) else match[0] if isinstance(match, tuple) else str(match)
+                                if len(match_id) >= 8 and match_id in valid_player_ids:
+                                    player_id_map[player] = match_id
+                                    logger.info(f"Mapped {player} -> {match_id}")
+                                    break
+                            
+                            if player in player_id_map:
+                                break
+                                
+                    except re.error as e:
+                        logger.warning(f"Regex error for pattern {i+1} with player {player}: {e}")
+                        continue
+                
+                # If still not found, try a simpler approach
+                if player not in player_id_map:
+                    # Look for the player name in a smaller context around player boards
+                    try:
+                        player_sections = re.findall(rf'player_board[^>]*>.{{0,500}}?{re.escape(player)}.{{0,500}}?</div>', 
+                                                    html_content, re.IGNORECASE | re.DOTALL)
+                        
+                        for section in player_sections:
+                            digit_matches = re.findall(r'\d{8,}', section)
+                            for digit_match in digit_matches:
+                                if digit_match in valid_player_ids:
+                                    player_id_map[player] = digit_match
+                                    logger.info(f"Mapped {player} -> {digit_match} (fallback method)")
+                                    break
+                            if player in player_id_map:
+                                break
+                    except re.error as e:
+                        logger.warning(f"Regex error in fallback method for player {player}: {e}")
+            
+            # Final fallback mapping if HTML-based mapping fails
+            if len(player_id_map) < len(valid_player_ids):
+                logger.warning(f"Only mapped {len(player_id_map)}/{len(valid_player_ids)} players, using fallback")
+                player_ids = sorted(valid_player_ids)
+                mapped_ids = set(player_id_map.values())
+                
+                # Map any remaining unmapped IDs to remaining names
+                unmapped_ids = [pid for pid in player_ids if pid not in mapped_ids]
+                unmapped_names = [name for name in names_to_try if name not in player_id_map]
+                
+                for i, player in enumerate(unmapped_names):
+                    if i < len(unmapped_ids):
+                        player_id_map[player] = unmapped_ids[i]
+                        logger.info(f"Fallback mapping: {player} -> {unmapped_ids[i]}")
+            
+            logger.info(f"Final player ID mapping: {player_id_map}")
+            return player_id_map
+            
+        except Exception as e:
+            logger.error(f"Error in player ID mapping extraction: {e}")
+            
+            # Return simple fallback mapping
+            fallback_map = {}
             for i, player in enumerate(player_names):
-                if player not in player_id_map and i < len(player_ids):
-                    player_id_map[player] = player_ids[i]
+                fallback_map[player] = f"unknown_{i}"
+            
+            return fallback_map
+    
+    def _extract_player_mapping_from_gamelogs(self, gamelogs: Dict[str, Any], valid_player_ids: set) -> Dict[str, str]:
+        """Extract player name to ID mapping from gamelogs data"""
+        mapping = {}
         
-        return player_id_map
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    args = data_item.get('args', {})
+                    
+                    # Look for entries that have both player_id and player_name
+                    if 'player_id' in args and 'player_name' in args:
+                        player_id = str(args['player_id'])
+                        player_name = args['player_name']
+                        
+                        # Only use if it's a valid player ID
+                        if player_id in valid_player_ids:
+                            mapping[player_name] = player_id
+                            logger.debug(f"Gamelogs mapping: {player_name} -> {player_id}")
+            
+            logger.info(f"Extracted {len(mapping)} player mappings from gamelogs")
+            return mapping
+            
+        except Exception as e:
+            logger.error(f"Error extracting player mapping from gamelogs: {e}")
+            return {}
     
     def _extract_corporations(self, soup: BeautifulSoup) -> Dict[str, str]:
         """Extract corporation assignments"""
