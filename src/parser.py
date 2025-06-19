@@ -32,6 +32,7 @@ class GameState:
     player_vp: Dict[str, Dict[str, Any]]  # player_id -> VP breakdown
     milestones: Dict[str, Dict[str, Any]]  # milestone_name -> details
     awards: Dict[str, Dict[str, Any]]  # award_name -> details
+    player_trackers: Dict[str, Dict[str, int]] = None  # player_id -> tracker_name -> value
     
     def __post_init__(self):
         if self.player_vp is None:
@@ -40,6 +41,8 @@ class GameState:
             self.milestones = {}
         if self.awards is None:
             self.awards = {}
+        if self.player_trackers is None:
+            self.player_trackers = {}
 
 @dataclass
 class Move:
@@ -115,30 +118,16 @@ class Parser:
     """Comprehensive Terraforming Mars game log parser for BoardGameArena replays"""
     
     def __init__(self):
-        self.resource_patterns = {
-            'M€': r'<div class="token_img tracker_m"[^>]*title="M€"[^>]*></div>',
-            'steel': r'<div class="token_img tracker_s"[^>]*title="Steel"[^>]*></div>',
-            'titanium': r'<div class="token_img tracker_u"[^>]*title="Titanium"[^>]*></div>',
-            'plant': r'<div class="token_img tracker_p"[^>]*title="Plant"[^>]*></div>',
-            'energy': r'<div class="token_img tracker_e"[^>]*title="Energy"[^>]*></div>',
-            'heat': r'<div class="token_img tracker_h"[^>]*title="Heat"[^>]*></div>',
-            'TR': r'<div class="token_img tracker_tr"[^>]*title="TR"[^>]*></div>',
-        }
-        
-        self.production_patterns = {
-            'M€_production': r'<div class="token_img tracker_pm"[^>]*title="M€ Production"[^>]*></div>',
-            'steel_production': r'<div class="token_img tracker_ps"[^>]*title="Steel Production"[^>]*></div>',
-            'titanium_production': r'<div class="token_img tracker_pu"[^>]*title="Titanium Production"[^>]*></div>',
-            'plant_production': r'<div class="token_img tracker_pp"[^>]*title="Plant Production"[^>]*></div>',
-            'energy_production': r'<div class="token_img tracker_pe"[^>]*title="Energy Production"[^>]*></div>',
-            'heat_production': r'<div class="token_img tracker_ph"[^>]*title="Heat Production"[^>]*></div>',
-        }
+        pass
     
     def parse_complete_game(self, html_content: str, replay_id: str) -> GameData:
         """Parse a complete game and return comprehensive data structure"""
         logger.info(f"Starting parsing for game {replay_id}")
         
         soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Extract gamelogs once for memory efficiency
+        gamelogs = self._extract_g_gamelogs(html_content)
         
         # Extract basic game info
         players_info = self._extract_players_info(soup, html_content)
@@ -151,6 +140,22 @@ class Parser:
         
         # Build game states for each move
         moves_with_states = self._build_game_states(moves, vp_progression, players_info)
+        
+        # Add comprehensive resource/production/tag tracking if gamelogs available
+        tracking_progression = []
+        if gamelogs and players_info:
+            logger.info("Adding comprehensive tracking data to game states")
+            # Extract tracker dictionary dynamically from HTML
+            tracker_dict = self._extract_tracker_dictionary_from_html(html_content)
+            
+            # Get player IDs for tracking
+            player_ids = list(players_info.keys())
+            
+            # Track resources and production through all moves
+            tracking_progression = self._track_resources_and_production(gamelogs, player_ids, tracker_dict)
+            
+            # Update game states with tracking data
+            self._update_game_states_with_tracking(moves_with_states, tracking_progression)
         
         # Extract parameter progression
         parameter_progression = self._extract_parameter_progression(moves_with_states)
@@ -326,9 +331,7 @@ class Parser:
             card_cost = self._extract_card_cost(log_entries)
             tile_placed, tile_location = self._extract_tile_placement(log_entries)
             
-            # Extract resource and production changes
-            resource_changes = self._extract_resource_changes_detailed(log_entries)
-            production_changes = self._extract_production_changes_detailed(log_entries)
+            # Extract parameter changes (resource/production now handled by comprehensive tracking)
             parameter_changes = self._extract_parameter_changes_detailed(log_entries)
             
             move = Move(
@@ -342,8 +345,8 @@ class Parser:
                 card_cost=card_cost,
                 tile_placed=tile_placed,
                 tile_location=tile_location,
-                resource_changes=resource_changes,
-                production_changes=production_changes,
+                resource_changes={},  # Now handled by comprehensive tracking
+                production_changes={},  # Now handled by comprehensive tracking
                 parameter_changes=parameter_changes
             )
             
@@ -1220,9 +1223,448 @@ class Parser:
             'parser_version': '1.0.0',
             'features_extracted': [
                 'moves', 'game_states', 'vp_progression', 
-                'parameter_progression', 'player_data'
+                'parameter_progression', 'player_data', 'comprehensive_tracking'
             ]
         }
+
+    def _extract_tracker_dictionary_from_html(self, html_content: str) -> Dict[str, str]:
+        """Dynamically extract all tracker mappings from HTML elements"""
+        tracker_dict = {}
+        
+        try:
+            logger.info("Starting tracker dictionary extraction...")
+            
+            # Method 1: Look for elements with data-name attributes
+            patterns = [
+                # Look for data-name attribute
+                r'<[^>]*id="((?:tracker_|counter_)[^"]+)"[^>]*data-name="([^"]+)"[^>]*>',
+                # Look for title attribute  
+                r'<[^>]*id="((?:tracker_|counter_)[^"]+)"[^>]*title="([^"]+)"[^>]*>',
+            ]
+            
+            for i, pattern in enumerate(patterns):
+                matches = re.findall(pattern, html_content, re.IGNORECASE | re.DOTALL)
+                logger.info(f"Pattern {i+1} found {len(matches)} matches")
+                
+                for tracker_id, display_name in matches:
+                    if tracker_id and display_name:
+                        tracker_dict[tracker_id] = display_name.strip()
+            
+            # Method 2: If we didn't get enough results, try aggressive extraction
+            if len(tracker_dict) < 10:  # Expect more trackers in a typical game
+                logger.info("Not enough trackers found, trying aggressive extraction...")
+                
+                # Find all tracker/counter IDs first
+                id_pattern = r'id="((?:tracker_|counter_)[^"]+)"'
+                all_ids = re.findall(id_pattern, html_content, re.IGNORECASE)
+                logger.info(f"Found {len(all_ids)} tracker/counter IDs total")
+                
+                for tracker_id in all_ids:
+                    if tracker_id not in tracker_dict:
+                        # Try to find the display name by looking at the surrounding HTML
+                        display_name = self._infer_display_name_from_context(tracker_id, html_content)
+                        if display_name:
+                            tracker_dict[tracker_id] = display_name
+            
+            logger.info(f"Extracted {len(tracker_dict)} tracker mappings dynamically from HTML")
+            
+            # Log some examples for debugging
+            if tracker_dict:
+                sample_items = list(tracker_dict.items())[:5]
+                logger.info(f"Sample tracker mappings: {sample_items}")
+            
+            return tracker_dict
+            
+        except Exception as e:
+            logger.error(f"Error extracting tracker dictionary: {e}")
+            return {}
+
+    def _infer_display_name_from_context(self, tracker_id: str, html_content: str) -> str:
+        """Try to infer display name from surrounding HTML context"""
+        try:
+            # Find the tracker element in the HTML
+            tracker_pattern = rf'id="{re.escape(tracker_id)}"'
+            match = re.search(tracker_pattern, html_content)
+            
+            if not match:
+                return ""
+            
+            # Extract surrounding context (1000 chars before and after)
+            start = max(0, match.start() - 1000)
+            end = min(len(html_content), match.end() + 1000)
+            context = html_content[start:end]
+            
+            # Look for data-name or title attributes in the context
+            name_patterns = [
+                rf'id="{re.escape(tracker_id)}"[^>]*data-name="([^"]+)"',
+                rf'id="{re.escape(tracker_id)}"[^>]*title="([^"]+)"',
+                rf'data-name="([^"]+)"[^>]*id="{re.escape(tracker_id)}"',
+                rf'title="([^"]+)"[^>]*id="{re.escape(tracker_id)}"',
+            ]
+            
+            for pattern in name_patterns:
+                name_match = re.search(pattern, context, re.IGNORECASE)
+                if name_match:
+                    return name_match.group(1).strip()
+            
+            # If no explicit name found, try to infer from the tracker ID itself
+            return self._infer_from_tracker_id(tracker_id)
+            
+        except Exception as e:
+            logger.error(f"Error inferring display name for {tracker_id}: {e}")
+            return ""
+
+    def _infer_from_tracker_id(self, tracker_id: str) -> str:
+        """Infer display name from tracker ID patterns"""
+        # Remove player color code (6-digit hex at the end)
+        base_id = re.sub(r'_[a-f0-9]{6}$', '', tracker_id, flags=re.IGNORECASE)
+        
+        # Map common tracker patterns to display names
+        mappings = {
+            'counter_hand': 'Hand Counter',
+            'tracker_m': 'MC',
+            'tracker_pm': 'MC Production',
+            'tracker_s': 'Steel',
+            'tracker_ps': 'Steel Production',
+            'tracker_u': 'Titanium',
+            'tracker_pu': 'Titanium Production',
+            'tracker_p': 'Plant',
+            'tracker_pp': 'Plant Production',
+            'tracker_e': 'Energy',
+            'tracker_pe': 'Energy Production',
+            'tracker_h': 'Heat',
+            'tracker_ph': 'Heat Production',
+            'tracker_tagBuilding': 'Count of Building tags',
+            'tracker_tagSpace': 'Count of Space tags',
+            'tracker_tagScience': 'Count of Science tags',
+            'tracker_tagEnergy': 'Count of Power tags',
+            'tracker_tagEarth': 'Count of Earth tags',
+            'tracker_tagJovian': 'Count of Jovian tags',
+            'tracker_tagCity': 'Count of City tags',
+            'tracker_tagPlant': 'Count of Plant tags',
+            'tracker_tagMicrobe': 'Count of Microbe tags',
+            'tracker_tagAnimal': 'Count of Animal tags',
+            'tracker_tagWild': 'Count of Wild tags',
+            'tracker_tagEvent': 'Count of played Events cards',
+            'tracker_ers': 'Steel Exchange Rate',
+            'tracker_eru': 'Titanium Exchange Rate',
+        }
+        
+        return mappings.get(base_id, f"Unknown ({base_id})")
+
+    def _infer_tracker_display_name(self, tracker_id: str, html_content: str) -> str:
+        """Infer display name for a tracker from HTML context"""
+        try:
+            # Find the section of HTML around this tracker ID
+            tracker_pattern = rf'id="{re.escape(tracker_id)}"'
+            match = re.search(tracker_pattern, html_content)
+            
+            if not match:
+                return ""
+            
+            # Extract surrounding context (500 chars before and after)
+            start = max(0, match.start() - 500)
+            end = min(len(html_content), match.end() + 500)
+            context = html_content[start:end]
+            
+            # Look for common patterns that indicate the tracker type
+            if "counter_hand" in tracker_id:
+                return "Hand Counter"
+            elif "tracker_m_" in tracker_id and "production" not in context.lower():
+                return "MC"
+            elif "tracker_pm_" in tracker_id or ("tracker_m_" in tracker_id and "production" in context.lower()):
+                return "MC Production"
+            elif "tracker_s_" in tracker_id and "production" not in context.lower():
+                return "Steel"
+            elif "tracker_ps_" in tracker_id or ("tracker_s_" in tracker_id and "production" in context.lower()):
+                return "Steel Production"
+            elif "tracker_u_" in tracker_id and "production" not in context.lower():
+                return "Titanium"
+            elif "tracker_pu_" in tracker_id or ("tracker_u_" in tracker_id and "production" in context.lower()):
+                return "Titanium Production"
+            elif "tracker_p_" in tracker_id and "production" not in context.lower():
+                return "Plant"
+            elif "tracker_pp_" in tracker_id or ("tracker_p_" in tracker_id and "production" in context.lower()):
+                return "Plant Production"
+            elif "tracker_e_" in tracker_id and "production" not in context.lower():
+                return "Energy"
+            elif "tracker_pe_" in tracker_id or ("tracker_e_" in tracker_id and "production" in context.lower()):
+                return "Energy Production"
+            elif "tracker_h" in tracker_id and "production" not in context.lower():
+                return "Heat"
+            elif "tracker_ph_" in tracker_id or ("tracker_h" in tracker_id and "production" in context.lower()):
+                return "Heat Production"
+            elif "tracker_tagBuilding" in tracker_id:
+                return "Count of Building tags"
+            elif "tracker_tagSpace" in tracker_id:
+                return "Count of Space tags"
+            elif "tracker_tagScience" in tracker_id:
+                return "Count of Science tags"
+            elif "tracker_tagEnergy" in tracker_id:
+                return "Count of Power tags"
+            elif "tracker_tagEarth" in tracker_id:
+                return "Count of Earth tags"
+            elif "tracker_tagJovian" in tracker_id:
+                return "Count of Jovian tags"
+            elif "tracker_tagCity" in tracker_id:
+                return "Count of City tags"
+            elif "tracker_tagPlant" in tracker_id:
+                return "Count of Plant tags"
+            elif "tracker_tagMicrobe" in tracker_id:
+                return "Count of Microbe tags"
+            elif "tracker_tagAnimal" in tracker_id:
+                return "Count of Animal tags"
+            elif "tracker_tagWild" in tracker_id:
+                return "Count of Wild tags"
+            elif "tracker_tagEvent" in tracker_id:
+                return "Count of played Events cards"
+            elif "tracker_ers" in tracker_id:
+                return "Steel Exchange Rate"
+            elif "tracker_eru" in tracker_id:
+                return "Titanium Exchange Rate"
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"Error inferring display name for {tracker_id}: {e}")
+            return ""
+
+    def _extract_player_color_codes(self, html_content: str) -> List[str]:
+        """Extract player color codes from HTML elements"""
+        color_codes = set()
+        
+        try:
+            # Pattern 1: Extract from player_panel_content_XXXXXX
+            panel_pattern = r'id="player_panel_content_([a-f0-9]{6})"'
+            panel_matches = re.findall(panel_pattern, html_content, re.IGNORECASE)
+            color_codes.update(panel_matches)
+            
+            # Pattern 2: Extract from miniboard_XXXXXX
+            miniboard_pattern = r'id="miniboard_([a-f0-9]{6})"'
+            miniboard_matches = re.findall(miniboard_pattern, html_content, re.IGNORECASE)
+            color_codes.update(miniboard_matches)
+            
+            # Pattern 3: Extract from tracker IDs directly
+            tracker_pattern = r'id="(?:counter_hand|tracker_[a-z]+)_([a-f0-9]{6})"'
+            tracker_matches = re.findall(tracker_pattern, html_content, re.IGNORECASE)
+            color_codes.update(tracker_matches)
+            
+            # Pattern 4: Extract from player_board_inner_XXXXXX
+            board_inner_pattern = r'id="player_board_inner_([a-f0-9]{6})"'
+            board_inner_matches = re.findall(board_inner_pattern, html_content, re.IGNORECASE)
+            color_codes.update(board_inner_matches)
+            
+            result = sorted(list(color_codes))
+            logger.info(f"Extracted {len(result)} player color codes: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error extracting player color codes: {e}")
+            return []
+
+    def _track_resources_and_production(self, gamelogs: Dict[str, Any], player_ids: List[str], 
+                                       tracker_dict: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Track comprehensive player state through all moves using gamelogs JSON"""
+        logger.info(f"Starting comprehensive tracking for {len(player_ids)} players")
+        logger.info(f"Tracker dictionary has {len(tracker_dict)} mappings")
+        
+        try:
+            # Initialize tracking data with actual player IDs and all trackers set to 0
+            player_data = {}
+            all_tracker_names = set(tracker_dict.values())
+            
+            for player_id in player_ids:
+                player_data[int(player_id)] = {tracker_name: 0 for tracker_name in all_tracker_names}
+            
+            logger.info(f"Initialized {len(all_tracker_names)} trackers for each player")
+            
+            tracking_progression = []
+            
+            # Get all moves from gamelogs
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            if not data_entries:
+                logger.warning("No data entries found in gamelogs")
+                return []
+            
+            # Find the maximum move ID to determine range
+            max_move_id = 0
+            for entry in data_entries:
+                move_id = entry.get('move_id')
+                if move_id and str(move_id).isdigit():
+                    max_move_id = max(max_move_id, int(move_id))
+            
+            logger.info(f"Processing {max_move_id} moves for tracking")
+            
+            # Process each move
+            for move_index in range(1, max_move_id + 1):
+                # Find the move entry
+                move_entry = None
+                for entry in data_entries:
+                    if entry.get('move_id') == str(move_index):
+                        move_entry = entry
+                        break
+                
+                if not move_entry:
+                    # Even if no move entry, store current state to maintain progression
+                    tracking_entry = {
+                        'move_index': move_index,
+                        'data': {pid: dict(data) for pid, data in player_data.items()}
+                    }
+                    tracking_progression.append(tracking_entry)
+                    continue
+                
+                # Process all submoves in this move to find counter updates
+                submoves = move_entry.get('data', [])
+                for submove in submoves:
+                    if not isinstance(submove, dict):
+                        continue
+                    
+                    # Look for counter updates
+                    args = submove.get('args', {})
+                    if 'counter_name' in args and 'counter_value' in args and 'player_id' in args:
+                        counter_name = args['counter_name']
+                        counter_value = args['counter_value']
+                        gamelogs_player_id = str(args['player_id'])
+                        
+                        # Find the display name for this counter
+                        display_name = tracker_dict.get(counter_name)
+                        if display_name:
+                            # Convert gamelogs player ID to actual player ID
+                            actual_player_id = int(gamelogs_player_id)
+                            
+                            if actual_player_id in player_data:
+                                # Convert value to int and update the persistent state
+                                try:
+                                    validated_value = int(counter_value)
+                                except (ValueError, TypeError):
+                                    validated_value = 0
+                                
+                                # Update the persistent player data (this carries forward to next moves)
+                                player_data[actual_player_id][display_name] = validated_value
+                                logger.debug(f"Move {move_index}: Player {actual_player_id} {display_name} = {validated_value}")
+                
+                # Store snapshot of current state (includes all previous values + any updates from this move)
+                tracking_entry = {
+                    'move_index': move_index,
+                    'data': {pid: dict(data) for pid, data in player_data.items()}
+                }
+                tracking_progression.append(tracking_entry)
+            
+            logger.info(f"Completed tracking: {len(tracking_progression)} move snapshots")
+            return tracking_progression
+            
+        except Exception as e:
+            logger.error(f"Error in comprehensive tracking: {e}")
+            return []
+
+    def _create_player_color_mapping(self, player_ids: List[str], tracker_dict: Dict[str, str]) -> Dict[str, str]:
+        """Create mapping from player color codes to actual player IDs"""
+        color_to_id = {}
+        
+        # Extract color codes from tracker dictionary keys
+        color_codes = set()
+        for tracker_id in tracker_dict.keys():
+            # Extract color code from tracker IDs like "counter_hand_ff0000"
+            parts = tracker_id.split('_')
+            if len(parts) >= 3 and len(parts[-1]) == 6:
+                color_codes.add(parts[-1])
+        
+        # Map color codes to player IDs (simple mapping by order)
+        color_list = sorted(list(color_codes))
+        player_list = sorted(player_ids)
+        
+        for i, color in enumerate(color_list):
+            if i < len(player_list):
+                color_to_id[color] = player_list[i]
+        
+        return color_to_id
+
+    def _categorize_tracker_data(self, tracker_name: str, value) -> Tuple[str, str, int]:
+        """Categorize tracker data into resources, production, tags, etc."""
+        # Convert value to int if it's a string
+        try:
+            validated_value = int(value)
+        except (ValueError, TypeError):
+            validated_value = 0
+        
+        if "Production" in tracker_name:
+            # Production values - validate with minimums
+            if "MC" in tracker_name:
+                validated_value = max(-5, validated_value)  # MC production can go to -5
+            else:
+                validated_value = max(0, validated_value)  # Other production can't go below 0
+            category = "production"
+            clean_name = tracker_name.replace(" Production", "")
+        elif "Count of" in tracker_name or "tags" in tracker_name.lower():
+            # Tag counts - can't be negative
+            validated_value = max(0, validated_value)
+            category = "tags"
+            clean_name = tracker_name.replace("Count of ", "").replace(" tags", "")
+        elif "Exchange Rate" in tracker_name:
+            # Exchange rates - minimum values
+            if "Steel" in tracker_name:
+                validated_value = max(2, validated_value)  # Steel exchange rate minimum 2
+            elif "Titanium" in tracker_name:
+                validated_value = max(3, validated_value)  # Titanium exchange rate minimum 3
+            category = "exchange_rates"
+            clean_name = tracker_name.replace(" Exchange Rate", "")
+        elif "Hand Counter" in tracker_name:
+            # Hand count - can't be negative
+            validated_value = max(0, validated_value)
+            category = "hand_count"
+            clean_name = "Hand"
+        else:
+            # Regular resources
+            if tracker_name == "MC":
+                validated_value = validated_value  # MC can be negative
+            else:
+                validated_value = max(0, validated_value)  # Other resources can't be negative
+            category = "resources"
+            clean_name = tracker_name
+        
+        return category, clean_name, validated_value
+
+    def _update_game_states_with_tracking(self, moves: List[Move], tracking_progression: List[Dict[str, Any]]):
+        """Update GameState objects with comprehensive tracking data"""
+        logger.info(f"Updating {len(moves)} game states with tracking data")
+        
+        # Create a mapping from move index to tracking data
+        tracking_by_move = {}
+        for entry in tracking_progression:
+            move_index = entry['move_index']
+            tracking_by_move[move_index] = entry['data']
+        
+        # Update each move's game state
+        for move in moves:
+            if not move.game_state:
+                continue
+            
+            # Get tracking data for this move
+            move_tracking = tracking_by_move.get(move.move_number, {})
+            
+            if move_tracking:
+                # Store tracking data directly without categorization
+                for player_id, player_tracking in move_tracking.items():
+                    # Convert player_id to string for consistent key usage
+                    player_id_str = str(player_id)
+                    
+                    # Initialize player trackers if not present
+                    if player_id_str not in move.game_state.player_trackers:
+                        move.game_state.player_trackers[player_id_str] = {}
+                    
+                    # Store all tracker values directly
+                    for tracker_name, value in player_tracking.items():
+                        # Convert value to int and store directly with original tracker name
+                        try:
+                            validated_value = int(value)
+                        except (ValueError, TypeError):
+                            validated_value = 0
+                        
+                        move.game_state.player_trackers[player_id_str][tracker_name] = validated_value
+                
+                logger.debug(f"Updated game state for move {move.move_number} with tracking data")
+        
+        logger.info("Completed updating game states with comprehensive tracking data")
 
     def parse_complete_game_with_elo(self, replay_html: str, table_html: str, table_id: str) -> GameData:
         """Parse a complete game with ELO data from both replay and table HTML"""
@@ -1603,6 +2045,62 @@ class Parser:
                 logger.info(f"Merged ELO data for player {player.player_name}")
             else:
                 logger.warning(f"No ELO data found for player {player.player_name}")
+
+    def track_resources_and_production_only(self, html_content: str) -> List[Dict[str, Any]]:
+        """
+        Extract only the resource/production tracking data in the exact format requested.
+        Returns a list of dictionaries with move_index and data for each player.
+        
+        Args:
+            html_content: HTML content of the game replay
+            
+        Returns:
+            List of tracking entries in format:
+            [
+                {
+                    'move_index': 1,
+                    'data': {
+                        86949293: {'MC': 87, 'MC Production': 39, ...},
+                        96014413: {'MC': 112, 'MC Production': 33, ...}
+                    }
+                },
+                ...
+            ]
+        """
+        logger.info("Starting resource/production tracking only")
+        
+        try:
+            # Extract gamelogs
+            gamelogs = self._extract_g_gamelogs(html_content)
+            if not gamelogs:
+                logger.error("No gamelogs found in HTML")
+                return []
+            
+            # Extract tracker dictionary dynamically from HTML
+            tracker_dict = self._extract_tracker_dictionary_from_html(html_content)
+            if not tracker_dict:
+                logger.error("No tracker dictionary extracted from HTML")
+                return []
+            
+            # Extract player IDs from HTML
+            soup = BeautifulSoup(html_content, 'html.parser')
+            players_info = self._extract_players_info(soup, html_content)
+            if not players_info:
+                logger.error("No players found in HTML")
+                return []
+            
+            player_ids = list(players_info.keys())
+            logger.info(f"Found {len(player_ids)} players: {player_ids}")
+            
+            # Track resources and production through all moves
+            tracking_progression = self._track_resources_and_production(gamelogs, player_ids, tracker_dict)
+            
+            logger.info(f"Completed tracking: {len(tracking_progression)} move snapshots")
+            return tracking_progression
+            
+        except Exception as e:
+            logger.error(f"Error in resource/production tracking: {e}")
+            return []
 
     def export_to_json(self, game_data: GameData, output_path: str):
         """Export game data to JSON"""

@@ -242,7 +242,6 @@ def main():
     # Import scraper module
     from src.scraper import TMScraper
     from src.games_registry import GamesRegistry
-    from src.bga_session import BGASession
     
     # Get player ID from user
     player_id = input("Enter the BGA player ID to scrape game history for: ").strip()
