@@ -176,12 +176,13 @@ class TMScraper:
             print("⚠️  Could not verify login, but continuing anyway...")
             return True
     
-    def scrape_table_only(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_only(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
         Scrape only the table page for a game, extract player info and check Arena mode
         
         Args:
             table_id: BGA table ID
+            player_perspective: Player ID whose perspective this table is being scraped from
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             
@@ -261,12 +262,13 @@ class TMScraper:
             logger.error(f"Error scraping table only for {table_id}: {e}")
             return None
 
-    def scrape_table_and_replay(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_and_replay(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
         Scrape both table page and replay page for a game, filtering for Arena mode only
         
         Args:
             table_id: BGA table ID
+            player_perspective: Player ID whose perspective this game is being scraped from
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             
@@ -1251,13 +1253,13 @@ class TMScraper:
             logger.debug(f"Error parsing datetime from text '{text}': {e}")
             return None
 
-    def scrape_multiple_tables_and_replays(self, table_ids: List[str], save_raw: bool = True,
+    def scrape_multiple_tables_and_replays(self, games_with_perspectives: List[Dict], save_raw: bool = True,
                                          raw_data_dir: str = 'data/raw') -> List[Dict]:
         """
-        Scrape multiple table and replay pages
+        Scrape multiple table and replay pages with player perspectives
         
         Args:
-            table_ids: List of BGA table IDs
+            games_with_perspectives: List of dicts with 'table_id' and 'player_perspective' keys
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             
@@ -1266,22 +1268,25 @@ class TMScraper:
         """
         results = []
         
-        logger.info(f"Starting batch scraping of {len(table_ids)} games (table + replay)")
+        logger.info(f"Starting batch scraping of {len(games_with_perspectives)} games (table + replay)")
         
-        for i, table_id in enumerate(table_ids, 1):
-            logger.info(f"Processing game {i}/{len(table_ids)} (table ID: {table_id})")
-            print(f"\nProcessing game {i}/{len(table_ids)} (table ID: {table_id})")
+        for i, game_info in enumerate(games_with_perspectives, 1):
+            table_id = game_info['table_id']
+            player_perspective = game_info['player_perspective']
             
-            result = self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            logger.info(f"Processing game {i}/{len(games_with_perspectives)} (table ID: {table_id}, perspective: {player_perspective})")
+            print(f"\nProcessing game {i}/{len(games_with_perspectives)} (table ID: {table_id}, perspective: {player_perspective})")
+            
+            result = self.scrape_table_and_replay(table_id, player_perspective, save_raw, raw_data_dir)
             if result:
                 results.append(result)
             
             # Delay between requests (except for the last one)
-            if i < len(table_ids):
+            if i < len(games_with_perspectives):
                 print(f"Waiting {self.request_delay} seconds...")
                 time.sleep(self.request_delay)
         
-        logger.info(f"Batch scraping completed. Successfully scraped {len(results)}/{len(table_ids)} games")
+        logger.info(f"Batch scraping completed. Successfully scraped {len(results)}/{len(games_with_perspectives)} games")
         return results
 
     def scrape_multiple_replays(self, urls: List[str], save_raw: bool = True, 

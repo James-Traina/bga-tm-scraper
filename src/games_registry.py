@@ -32,6 +32,15 @@ class GamesRegistry:
                     self.registry_data = {}
                     for row in reader:
                         table_id = row['TableId']
+                        player_perspective = row.get('PlayerPerspective', '') if row.get('PlayerPerspective') else None
+                        
+                        # Create composite key: table_id + player_perspective
+                        # For backward compatibility, if no player_perspective, use table_id only
+                        if player_perspective:
+                            composite_key = f"{table_id}_{player_perspective}"
+                        else:
+                            composite_key = table_id
+                        
                         # Convert string values back to appropriate types
                         processed_row = {
                             'table_id': table_id,
@@ -42,9 +51,9 @@ class GamesRegistry:
                             'version': row.get('Version', '') if row.get('Version') else None,
                             'scraped_at': row['ScrapedAt'] if row['ScrapedAt'] else None,
                             'parsed_at': row['ParsedAt'] if row['ParsedAt'] else None,
-                            'player_perspective': row.get('PlayerPerspective', '') if row.get('PlayerPerspective') else None
+                            'player_perspective': player_perspective
                         }
-                        self.registry_data[table_id] = processed_row
+                        self.registry_data[composite_key] = processed_row
             except (IOError, csv.Error) as e:
                 print(f"Warning: Could not load registry file: {e}")
                 self._create_empty_registry()
@@ -67,18 +76,19 @@ class GamesRegistry:
             writer = csv.DictWriter(f, fieldnames=self.fieldnames)
             writer.writeheader()
             
-            for table_id, game_data in self.registry_data.items():
+            for composite_key, game_data in self.registry_data.items():
                 # Convert data back to CSV format
+                # Use the actual table_id from game_data, not the composite key
                 csv_row = {
-                    'TableId': table_id,
+                    'TableId': game_data['table_id'],
+                    'PlayerPerspective': game_data.get('player_perspective', '') if game_data.get('player_perspective') else '',
                     'RawDatetime': game_data['raw_datetime'],
                     'ParsedDatetime': game_data['parsed_datetime'],
                     'Players': '|'.join(str(pid) for pid in game_data['players']),
                     'IsArenaMode': '1' if game_data['is_arena_mode'] else '0',
                     'Version': game_data.get('version', '') if game_data.get('version') else '',
                     'ScrapedAt': game_data['scraped_at'] if game_data['scraped_at'] else '',
-                    'ParsedAt': game_data['parsed_at'] if game_data['parsed_at'] else '',
-                    'PlayerPerspective': game_data.get('player_perspective', '') if game_data.get('player_perspective') else ''
+                    'ParsedAt': game_data['parsed_at'] if game_data['parsed_at'] else ''
                 }
                 writer.writerow(csv_row)
     
@@ -86,6 +96,12 @@ class GamesRegistry:
                       players: List[str], is_arena_mode: bool = True, version: Optional[str] = None, 
                       player_perspective: Optional[str] = None) -> None:
         """Add a game check entry (called when encountering any game, even if skipped)"""
+        # Create composite key
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        
         game_entry = {
             'table_id': table_id,
             'raw_datetime': raw_datetime,
@@ -98,7 +114,7 @@ class GamesRegistry:
             'player_perspective': player_perspective
         }
         
-        self.registry_data[table_id] = game_entry
+        self.registry_data[composite_key] = game_entry
     
     def mark_game_scraped(self, table_id: str, scraped_at: Optional[str] = None, 
                          player_perspective: Optional[str] = None) -> None:
@@ -106,13 +122,19 @@ class GamesRegistry:
         if scraped_at is None:
             scraped_at = datetime.now().isoformat()
         
-        if table_id in self.registry_data:
-            self.registry_data[table_id]['scraped_at'] = scraped_at
+        # Create composite key
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        
+        if composite_key in self.registry_data:
+            self.registry_data[composite_key]['scraped_at'] = scraped_at
             if player_perspective:
-                self.registry_data[table_id]['player_perspective'] = player_perspective
+                self.registry_data[composite_key]['player_perspective'] = player_perspective
         else:
             # If game wasn't checked before, create minimal entry
-            self.registry_data[table_id] = {
+            self.registry_data[composite_key] = {
                 'table_id': table_id,
                 'raw_datetime': '',
                 'parsed_datetime': '',
@@ -143,21 +165,35 @@ class GamesRegistry:
                 'player_perspective': None
             }
     
-    def is_game_checked(self, table_id: str) -> bool:
+    def is_game_checked(self, table_id: str, player_perspective: Optional[str] = None) -> bool:
         """Check if a game has been encountered/checked before"""
-        return table_id in self.registry_data
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        return composite_key in self.registry_data
     
-    def is_game_scraped(self, table_id: str) -> bool:
+    def is_game_scraped(self, table_id: str, player_perspective: Optional[str] = None) -> bool:
         """Check if a game has been successfully scraped"""
-        if table_id not in self.registry_data:
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        
+        if composite_key not in self.registry_data:
             return False
-        return self.registry_data[table_id]['scraped_at'] is not None
+        return self.registry_data[composite_key]['scraped_at'] is not None
     
-    def is_game_parsed(self, table_id: str) -> bool:
+    def is_game_parsed(self, table_id: str, player_perspective: Optional[str] = None) -> bool:
         """Check if a game has been successfully parsed"""
-        if table_id not in self.registry_data:
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        
+        if composite_key not in self.registry_data:
             return False
-        return self.registry_data[table_id]['parsed_at'] is not None
+        return self.registry_data[composite_key]['parsed_at'] is not None
     
     def get_scraped_game_ids(self) -> Set[str]:
         """Get set of all scraped game IDs"""
@@ -252,9 +288,28 @@ class GamesRegistry:
                 'player_perspective': None
             }
 
-    def get_game_info(self, table_id: str) -> Optional[Dict]:
+    def is_table_checked(self, table_id: str) -> bool:
+        """Check if a table has been checked for Arena mode (regardless of player perspective)"""
+        # Check if there's any entry for this table_id (with or without player perspective)
+        for composite_key in self.registry_data.keys():
+            if composite_key == table_id or composite_key.startswith(f"{table_id}_"):
+                return True
+        return False
+    
+    def is_replay_scraped(self, table_id: str, player_perspective: str) -> bool:
+        """Check if a replay has been scraped for a specific player perspective"""
+        composite_key = f"{table_id}_{player_perspective}"
+        if composite_key not in self.registry_data:
+            return False
+        return self.registry_data[composite_key]['scraped_at'] is not None
+
+    def get_game_info(self, table_id: str, player_perspective: Optional[str] = None) -> Optional[Dict]:
         """Get information about a specific game"""
-        return self.registry_data.get(table_id)
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        return self.registry_data.get(composite_key)
     
     def get_all_games(self) -> Dict[str, Dict]:
         """Get all games in the registry"""
@@ -276,16 +331,30 @@ class GamesRegistry:
             if game_data['scraped_at'] is None
         }
     
-    def filter_new_games(self, game_list: List[Dict]) -> List[Dict]:
-        """Filter out games that have already been scraped"""
+    def filter_new_games(self, game_list: List[Dict], player_perspective: Optional[str] = None) -> List[Dict]:
+        """Filter out games that have already been scraped for the given player perspective"""
+        return [
+            game for game in game_list 
+            if not self.is_game_scraped(game.get("table_id"), player_perspective)
+        ]
+    
+    def filter_unchecked_games(self, game_list: List[Dict], player_perspective: Optional[str] = None) -> List[Dict]:
+        """Filter out games that have already been checked for the given player perspective"""
+        return [
+            game for game in game_list 
+            if not self.is_game_checked(game.get("table_id"), player_perspective)
+        ]
+    
+    def filter_new_games_legacy(self, game_list: List[Dict]) -> List[Dict]:
+        """Filter out games that have already been scraped (legacy method - table ID only)"""
         scraped_ids = self.get_scraped_game_ids()
         return [
             game for game in game_list 
             if game.get("table_id") not in scraped_ids
         ]
     
-    def filter_unchecked_games(self, game_list: List[Dict]) -> List[Dict]:
-        """Filter out games that have already been checked"""
+    def filter_unchecked_games_legacy(self, game_list: List[Dict]) -> List[Dict]:
+        """Filter out games that have already been checked (legacy method - table ID only)"""
         checked_ids = self.get_checked_game_ids()
         return [
             game for game in game_list 
