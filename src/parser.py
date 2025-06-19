@@ -122,7 +122,7 @@ class Parser:
         players_info = self._extract_players_info(soup, html_content)
         
         # Extract all moves with detailed parsing
-        moves = self._extract_all_moves(soup, players_info)
+        moves = self._extract_all_moves(soup, players_info, gamelogs)
         
         # Extract VP progression throughout the game
         vp_progression = self._extract_vp_progression(html_content)
@@ -265,7 +265,7 @@ class Parser:
         logger.info(f"Extracted {len(result)} player names from moves: {result}")
         return result
     
-    def _extract_all_moves(self, soup: BeautifulSoup, players_info: Dict[str, Player]) -> List[Move]:
+    def _extract_all_moves(self, soup: BeautifulSoup, players_info: Dict[str, Player], gamelogs: Dict[str, Any] = None) -> List[Move]:
         """Extract all moves with detailed information"""
         moves = []
         move_divs = soup.find_all('div', class_='replaylogs_move')
@@ -274,7 +274,7 @@ class Parser:
         name_to_id = {player.player_name: player_id for player_id, player in players_info.items()}
         
         for move_div in move_divs:
-            move = self._parse_single_move_detailed(move_div, name_to_id)
+            move = self._parse_single_move_detailed(move_div, name_to_id, gamelogs)
             if move:
                 moves.append(move)
                 
@@ -283,7 +283,7 @@ class Parser:
         
         return moves
     
-    def _parse_single_move_detailed(self, move_div: Tag, name_to_id: Dict[str, str]) -> Optional[Move]:
+    def _parse_single_move_detailed(self, move_div: Tag, name_to_id: Dict[str, str], gamelogs: Dict[str, Any] = None) -> Optional[Move]:
         """Parse a single move with comprehensive detail extraction"""
         try:
             # Extract move number and timestamp
@@ -311,8 +311,11 @@ class Parser:
             descriptions = [entry.get_text().strip() for entry in log_entries]
             full_description = ' | '.join(descriptions)
             
-            # Determine player
-            player_name, player_id = self._determine_move_player(log_entries, full_description, name_to_id)
+            # Determine player - use gamelogs first, then fallback to HTML parsing
+            player_name, player_id = self._determine_player_from_gamelogs(move_number, gamelogs, name_to_id)
+            if player_id == "unknown":
+                # Fallback to HTML-based player determination
+                player_name, player_id = self._determine_move_player(log_entries, full_description, name_to_id)
             
             # Extract action details
             action_type = self._classify_action_type(log_entries, full_description)
@@ -339,8 +342,62 @@ class Parser:
             logger.error(f"Error parsing move: {e}")
             return None
     
+    def _determine_player_from_gamelogs(self, move_number: int, gamelogs: Dict[str, Any], name_to_id: Dict[str, str]) -> Tuple[str, str]:
+        """Determine which player made this move using gamelogs data (preferred method)"""
+        if not gamelogs:
+            return "Unknown", "unknown"
+        
+        try:
+            # Find the move entry in gamelogs
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            move_entry = None
+            
+            for entry in data_entries:
+                if entry.get('move_id') == str(move_number):
+                    move_entry = entry
+                    break
+            
+            if not move_entry:
+                logger.debug(f"No gamelogs entry found for move {move_number}")
+                return "Unknown", "unknown"
+            
+            # Check the first data item in the move for player information
+            move_data = move_entry.get('data', [])
+            if not move_data:
+                logger.debug(f"No data found in gamelogs for move {move_number}")
+                return "Unknown", "unknown"
+            
+            # Get the first data item (usually contains the main action)
+            first_data_item = move_data[0]
+            args = first_data_item.get('args', {})
+            
+            # Check for active_player first (preferred)
+            if 'active_player' in args:
+                player_id = str(args['active_player'])
+                logger.debug(f"Move {move_number}: Found active_player = {player_id}")
+            elif 'player_id' in args:
+                player_id = str(args['player_id'])
+                logger.debug(f"Move {move_number}: Found player_id = {player_id}")
+            else:
+                logger.debug(f"Move {move_number}: No player ID found in gamelogs args")
+                return "Unknown", "unknown"
+            
+            # Try to find the player name from the name_to_id mapping
+            for player_name, mapped_id in name_to_id.items():
+                if mapped_id == player_id:
+                    logger.debug(f"Move {move_number}: Mapped player_id {player_id} to {player_name}")
+                    return player_name, player_id
+            
+            # If no mapping found, return the player_id as both name and id
+            logger.debug(f"Move {move_number}: No name mapping found for player_id {player_id}, using ID as name")
+            return f"Player_{player_id}", player_id
+            
+        except Exception as e:
+            logger.error(f"Error determining player from gamelogs for move {move_number}: {e}")
+            return "Unknown", "unknown"
+    
     def _determine_move_player(self, log_entries: List[Tag], description: str, name_to_id: Dict[str, str]) -> Tuple[str, str]:
-        """Determine which player made this move"""
+        """Determine which player made this move (fallback method using HTML parsing)"""
         # Look for explicit player mentions
         for entry in log_entries:
             text = entry.get_text()
