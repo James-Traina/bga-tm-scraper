@@ -2354,8 +2354,18 @@ class Parser:
             logger.error(f"Error in resource/production tracking: {e}")
             return []
 
-    def export_to_json(self, game_data: GameData, output_path: str):
-        """Export game data to JSON"""
+    def export_to_json(self, game_data: GameData, output_path: str, player_perspective: str = None):
+        """Export game data to JSON with player perspective folder structure"""
+        # If player_perspective is provided, modify the output path to include it
+        if player_perspective:
+            # Extract directory and filename
+            dir_path = os.path.dirname(output_path)
+            filename = os.path.basename(output_path)
+            
+            # Create player perspective subdirectory
+            player_dir = os.path.join(dir_path, player_perspective)
+            output_path = os.path.join(player_dir, filename)
+        
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         

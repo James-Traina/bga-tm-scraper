@@ -197,7 +197,7 @@ class TMScraper:
         try:
             # Step 1: Scrape table page for ELO data
             logger.info("Scraping table page...")
-            table_data = self.scrape_table_page(table_id, save_raw, raw_data_dir)
+            table_data = self.scrape_table_page(table_id, player_perspective, save_raw, raw_data_dir)
             if not table_data:
                 logger.error(f"Failed to scrape table page for {table_id}")
                 return None
@@ -283,7 +283,7 @@ class TMScraper:
         try:
             # Step 1: Scrape table page for ELO data
             logger.info("Scraping table page...")
-            table_data = self.scrape_table_page(table_id, save_raw, raw_data_dir)
+            table_data = self.scrape_table_page(table_id, player_perspective, save_raw, raw_data_dir)
             if not table_data:
                 logger.error(f"Failed to scrape table page for {table_id}")
                 return None
@@ -347,12 +347,13 @@ class TMScraper:
             logger.error(f"Error scraping table and replay for {table_id}: {e}")
             return None
     
-    def scrape_table_page(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_page(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """
         Scrape a table page for ELO information
         
         Args:
             table_id: BGA table ID
+            player_perspective: Player ID whose perspective this table is being scraped from
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             
@@ -384,8 +385,10 @@ class TMScraper:
             
             # Save raw HTML if requested
             if save_raw:
-                os.makedirs(raw_data_dir, exist_ok=True)
-                raw_file_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
+                # Create player perspective directory
+                player_raw_dir = os.path.join(raw_data_dir, player_perspective)
+                os.makedirs(player_raw_dir, exist_ok=True)
+                raw_file_path = os.path.join(player_raw_dir, f"table_{table_id}.html")
                 
                 with open(raw_file_path, 'w', encoding='utf-8') as f:
                     f.write(page_source)
@@ -694,8 +697,21 @@ class TMScraper:
             
             # Save raw HTML if requested
             if save_raw:
-                os.makedirs(raw_data_dir, exist_ok=True)
-                raw_file_path = os.path.join(raw_data_dir, f"replay_{replay_id}.html")
+                # Extract player perspective from URL for proper folder structure
+                from urllib.parse import urlparse, parse_qs
+                parsed_url = urlparse(url)
+                query_params = parse_qs(parsed_url.query)
+                player_perspective = query_params.get('player', [None])[0]
+                
+                if player_perspective:
+                    # Create player perspective directory
+                    player_raw_dir = os.path.join(raw_data_dir, player_perspective)
+                    os.makedirs(player_raw_dir, exist_ok=True)
+                    raw_file_path = os.path.join(player_raw_dir, f"replay_{replay_id}.html")
+                else:
+                    # Fallback to root directory if no player perspective found
+                    os.makedirs(raw_data_dir, exist_ok=True)
+                    raw_file_path = os.path.join(raw_data_dir, f"replay_{replay_id}.html")
                 
                 with open(raw_file_path, 'w', encoding='utf-8') as f:
                     f.write(page_source)

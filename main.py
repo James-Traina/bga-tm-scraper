@@ -124,8 +124,11 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                     })
                     break
                 
-                # Save replay HTML
-                replay_html_path = os.path.join(raw_data_dir, f"replay_{table_id}.html")
+                # Save replay HTML to player perspective folder
+                # Use the first player ID from the extracted player IDs as perspective
+                player_perspective_dir = os.path.join(raw_data_dir, player_id)
+                os.makedirs(player_perspective_dir, exist_ok=True)
+                replay_html_path = os.path.join(player_perspective_dir, f"replay_{table_id}.html")
                 with open(replay_html_path, 'w', encoding='utf-8') as f:
                     f.write(replay_html)
                 
@@ -155,9 +158,9 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                     table_id=table_id
                 )
                 
-                # Export to JSON
+                # Export to JSON with player perspective
                 output_path = f"data/parsed/game_{table_id}.json"
-                parser.export_to_json(game_data, output_path)
+                parser.export_to_json(game_data, output_path, player_perspective=player_id)
                 
                 parsing_results.append({
                     'table_id': table_id,
@@ -459,7 +462,8 @@ def main():
                             raw_datetime=game_info['raw_datetime'],
                             parsed_datetime=game_info['parsed_datetime'],
                             players=[],  # Will be populated after processing
-                            is_arena_mode=True  # Assume arena mode since we're filtering for it
+                            is_arena_mode=True,  # Assume arena mode since we're filtering for it
+                            player_perspective=player_id  # Add player perspective
                         )
                         games_registry.save_registry()  # Save immediately
                         print(f"📋 Added game {table_id} to registry")
@@ -469,14 +473,16 @@ def main():
                         print(f"Scraping table only for game {table_id}...")
                         scraping_result = scraper.scrape_table_only(
                             table_id=table_id,
+                            player_perspective=player_id,  # Use the player ID as perspective
                             save_raw=True,
                             raw_data_dir=RAW_DATA_DIR
                         )
                     else:
                         print(f"Scraping game {table_id}...")
                         # Use smart mode that automatically chooses between direct fetch and browser scraping
-                        scraping_result = scraper.scrape_with_smart_mode(
+                        scraping_result = scraper.scrape_table_and_replay(
                             table_id=table_id,
+                            player_perspective=player_id,  # Use the player ID as perspective
                             save_raw=True,
                             raw_data_dir=RAW_DATA_DIR
                         )
@@ -516,8 +522,8 @@ def main():
                                 version = scraping_result.get('version')
                                 
                                 # Update registry with player info, arena mode status, and version
-                                if games_registry.is_game_checked(table_id):
-                                    game_info = games_registry.get_game_info(table_id)
+                                if games_registry.is_game_checked(table_id, player_perspective=player_id):
+                                    game_info = games_registry.get_game_info(table_id, player_perspective=player_id)
                                     if game_info:
                                         game_info['players'] = player_ids
                                         game_info['is_arena_mode'] = is_arena_mode
@@ -595,9 +601,9 @@ def main():
                                     table_id=table_id
                                 )
                                 
-                                # Export to JSON
+                                # Export to JSON with player perspective
                                 output_path = f"data/parsed/game_{table_id}.json"
-                                parser.export_to_json(game_data, output_path)
+                                parser.export_to_json(game_data, output_path, player_perspective=player_id)
                                 
                                 parsing_results.append({
                                     'table_id': table_id,
