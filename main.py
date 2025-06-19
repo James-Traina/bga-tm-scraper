@@ -571,21 +571,28 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
                 with open(table_html_path, 'r', encoding='utf-8') as f:
                     table_html = f.read()
                 
-                # Extract player IDs from table HTML
-                from src.scraper import TMScraper
-                temp_scraper = TMScraper("", 0)  # Dummy scraper for ID extraction
-                player_ids = temp_scraper.extract_player_ids_from_table(table_html)
+                # Use the player_perspective from registry if available, otherwise extract from HTML
+                if player_perspective:
+                    player_id = player_perspective
+                    print(f"✅ Using PlayerPerspective from registry: {player_id}")
+                else:
+                    # Fallback: Extract player IDs from table HTML
+                    from src.scraper import TMScraper
+                    temp_scraper = TMScraper("", 0)  # Dummy scraper for ID extraction
+                    player_ids = temp_scraper.extract_player_ids_from_table(table_html)
+                    
+                    if not player_ids:
+                        print(f"❌ No player IDs found for {table_id}")
+                        parsing_results.append({
+                            'table_id': table_id,
+                            'success': False,
+                            'error': 'No player IDs found'
+                        })
+                        continue
+                    
+                    player_id = player_ids[0]
+                    print(f"⚠️  No PlayerPerspective in registry, using first player ID from HTML: {player_id}")
                 
-                if not player_ids:
-                    print(f"❌ No player IDs found for {table_id}")
-                    parsing_results.append({
-                        'table_id': table_id,
-                        'success': False,
-                        'error': 'No player IDs found'
-                    })
-                    continue
-                
-                player_id = player_ids[0]
                 print(f"📁 Found table HTML at: {table_html_path}")
                 
                 # Check if replay HTML already exists (for games that were scraped but not parsed)
