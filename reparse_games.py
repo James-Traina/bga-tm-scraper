@@ -79,7 +79,8 @@ def get_game_ids_from_args(args) -> List[str]:
     # Add game IDs from positional arguments
     if args.game_ids:
         for game_id in args.game_ids:
-            if game_id.isdigit():
+            # Accept either numeric game IDs or composite keys (game_id:player_perspective)
+            if game_id.isdigit() or ':' in game_id:
                 game_ids.append(game_id)
             else:
                 print(f"⚠️  Skipping invalid game ID: {game_id}")
@@ -170,7 +171,7 @@ def parse_composite_key(composite_key: str) -> tuple[str, str]:
         # If no colon, treat as just game_id
         return composite_key, None
 
-def reparse_single_game(composite_key: str) -> dict:
+def reparse_single_game(composite_key: str, games_registry=None) -> dict:
     """Reparse a single game and return result"""
     # Parse composite key
     game_id, expected_player_perspective = parse_composite_key(composite_key)
@@ -200,6 +201,17 @@ def reparse_single_game(composite_key: str) -> dict:
             
             perspective_info = f" (perspective: {expected_player_perspective})" if expected_player_perspective else ""
             result['error'] = f"Missing files{perspective_info}: {', '.join(missing_files)}"
+            
+            # If files are missing and we have a games registry, clear the ParsedAt timestamp
+            # This handles cases where games were previously marked as parsed but files are missing
+            if games_registry and player_perspective:
+                print(f"🧹 Clearing incorrect ParsedAt timestamp for game with missing files {game_id}...")
+                game_info = games_registry.get_game_info(game_id, player_perspective)
+                if game_info and game_info.get('parsed_at'):
+                    game_info['parsed_at'] = None
+                    games_registry.save_registry()
+                    print(f"✅ Cleared ParsedAt timestamp for game {game_id}")
+            
             return result
         
         # Read HTML files
@@ -242,6 +254,12 @@ def reparse_single_game(composite_key: str) -> dict:
         result['moves_count'] = len(game_data.moves)
         result['elo_data_included'] = game_data.metadata.get('elo_data_included', False)
         
+        # Update games registry if provided
+        if games_registry and player_perspective:
+            print(f"📝 Updating games registry for game {game_id}...")
+            games_registry.mark_game_parsed(game_id, player_perspective=player_perspective)
+            games_registry.save_registry()
+        
         print(f"✅ Successfully reparsed game {game_id}")
         print(f"   Players: {result['players_count']}, Moves: {result['moves_count']}, ELO: {'✅' if result['elo_data_included'] else '❌'}")
         
@@ -251,6 +269,18 @@ def reparse_single_game(composite_key: str) -> dict:
         result['error'] = str(e)
         print(f"❌ Error reparsing game {game_id}: {e}")
         logger.error(f"Error reparsing game {game_id}: {e}")
+        
+        # If parsing failed and we have a games registry, clear the ParsedAt timestamp
+        # This handles cases where games were previously marked as parsed but actually failed
+        if games_registry and player_perspective:
+            print(f"🧹 Clearing incorrect ParsedAt timestamp for failed game {game_id}...")
+            # Find the game entry and clear the parsed_at field
+            game_info = games_registry.get_game_info(game_id, player_perspective)
+            if game_info and game_info.get('parsed_at'):
+                game_info['parsed_at'] = None
+                games_registry.save_registry()
+                print(f"✅ Cleared ParsedAt timestamp for game {game_id}")
+        
         return result
 
 def print_summary(results: List[dict]):
@@ -334,6 +364,11 @@ Examples:
     # Setup directories
     setup_directories()
     
+    # Initialize games registry
+    from src.games_registry import GamesRegistry
+    games_registry = GamesRegistry()
+    print(f"📋 Loaded games registry with {len(games_registry.get_all_games())} games")
+    
     # Get game IDs
     game_ids = get_game_ids_from_args(args)
     
@@ -361,7 +396,7 @@ Examples:
     for i, game_id in enumerate(unique_game_ids, 1):
         print(f"\n--- Processing game {i}/{len(unique_game_ids)} (ID: {game_id}) ---")
         
-        result = reparse_single_game(game_id)
+        result = reparse_single_game(game_id, games_registry)
         results.append(result)
         
         # Add delay between games (except for the last one)
