@@ -1345,9 +1345,7 @@ class Parser:
             'tracker_tagMicrobe': 'Count of Microbe tags',
             'tracker_tagAnimal': 'Count of Animal tags',
             'tracker_tagWild': 'Count of Wild tags',
-            'tracker_tagEvent': 'Count of played Events cards',
-            'tracker_ers': 'Steel Exchange Rate',
-            'tracker_eru': 'Titanium Exchange Rate',
+            'tracker_tagEvent': 'Count of played Events cards'
         }
         
         return mappings.get(base_id, f"Unknown ({base_id})")
@@ -1418,10 +1416,6 @@ class Parser:
                 return "Count of Wild tags"
             elif "tracker_tagEvent" in tracker_id:
                 return "Count of played Events cards"
-            elif "tracker_ers" in tracker_id:
-                return "Steel Exchange Rate"
-            elif "tracker_eru" in tracker_id:
-                return "Titanium Exchange Rate"
             
             return ""
             
@@ -1488,7 +1482,7 @@ class Parser:
             global_tracker_patterns = [
                 'Temperature', 'Oxygen Level', 'Oceans', 'TR', 'Global Parameters Delta',
                 'Number of Greenery on Mars', 'Number of owned land', 'Number of Cities',
-                'Number of Cities on Mars', 'Pass'
+                'Number of Cities on Mars', 'Pass', 'Steel Exchange Rate', 'Titanium Exchange Rate'
             ]
             
             # Remove global trackers from player tracker names
@@ -1506,7 +1500,9 @@ class Parser:
             logger.info(f"After filtering global trackers: {len(player_tracker_names)} player-specific tracker names")
             
             for player_id in player_ids:
-                player_data[int(player_id)] = {tracker_name: 0 for tracker_name in player_tracker_names}
+                # Initialize all trackers to 0
+                player_trackers = {tracker_name: 0 for tracker_name in player_tracker_names}
+                player_data[int(player_id)] = player_trackers
             
             logger.info(f"Initialized {len(player_tracker_names)} player-specific trackers for each player")
             
@@ -1561,6 +1557,24 @@ class Parser:
                         # Find the display name for this counter
                         display_name = tracker_dict.get(counter_name)
                         if display_name:
+                            # Check if this tracker should be excluded (same logic as initialization)
+                            global_tracker_patterns = [
+                                'Temperature', 'Oxygen Level', 'Oceans', 'TR', 'Global Parameters Delta',
+                                'Number of Greenery on Mars', 'Number of owned land', 'Number of Cities',
+                                'Number of Cities on Mars', 'Pass', 'Steel Exchange Rate', 'Titanium Exchange Rate'
+                            ]
+                            
+                            # Skip if this is a global tracker that should be excluded
+                            is_global = False
+                            for pattern in global_tracker_patterns:
+                                if pattern in display_name:
+                                    is_global = True
+                                    break
+                            
+                            if is_global:
+                                logger.debug(f"Move {move_index}: Skipping global tracker {display_name}")
+                                continue
+                            
                             # Convert gamelogs player ID to actual player ID
                             actual_player_id = int(gamelogs_player_id)
                             
@@ -1571,9 +1585,12 @@ class Parser:
                                 except (ValueError, TypeError):
                                     validated_value = 0
                                 
-                                # Update the persistent player data (this carries forward to next moves)
-                                player_data[actual_player_id][display_name] = validated_value
-                                logger.debug(f"Move {move_index}: Player {actual_player_id} {display_name} = {validated_value}")
+                                # Only update if this tracker exists in player_data (was initialized)
+                                if display_name in player_data[actual_player_id]:
+                                    player_data[actual_player_id][display_name] = validated_value
+                                    logger.debug(f"Move {move_index}: Player {actual_player_id} {display_name} = {validated_value}")
+                                else:
+                                    logger.debug(f"Move {move_index}: Skipping uninitialized tracker {display_name}")
                 
                 # Store snapshot of current state (includes all previous values + any updates from this move)
                 tracking_entry = {
@@ -1632,14 +1649,6 @@ class Parser:
             validated_value = max(0, validated_value)
             category = "tags"
             clean_name = tracker_name.replace("Count of ", "").replace(" tags", "")
-        elif "Exchange Rate" in tracker_name:
-            # Exchange rates - minimum values
-            if "Steel" in tracker_name:
-                validated_value = max(2, validated_value)  # Steel exchange rate minimum 2
-            elif "Titanium" in tracker_name:
-                validated_value = max(3, validated_value)  # Titanium exchange rate minimum 3
-            category = "exchange_rates"
-            clean_name = tracker_name.replace(" Exchange Rate", "")
         elif "Hand Counter" in tracker_name:
             # Hand count - can't be negative
             validated_value = max(0, validated_value)
