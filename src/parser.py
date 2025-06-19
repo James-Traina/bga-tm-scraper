@@ -672,6 +672,23 @@ class Parser:
             # Get VP data for this move by matching move_number with move_id
             move_vp_data = vp_by_move_id.get(str(move.move_number), {})
             
+            # Initialize player_vp on move_index 1 if no VP data available yet
+            if move.move_number == 1 and not move_vp_data:
+                move_vp_data = {}
+                for player_id in players_info.keys():
+                    move_vp_data[player_id] = {
+                        "total": 20,
+                        "total_details": {
+                            "tr": 20,
+                            "awards": 0,
+                            "milestones": 0,
+                            "cities": 0,
+                            "greeneries": 0,
+                            "cards": 0
+                        }
+                    }
+                logger.info(f"Initialized player_vp for move 1 with {len(move_vp_data)} players")
+            
             # Log when we find VP data for debugging
             if move_vp_data:
                 logger.debug(f"Found VP data for move {move.move_number}")
@@ -825,6 +842,10 @@ class Parser:
                 updated_details = {}
                 
                 for category, items in details.items():
+                    # Skip TR category since it's already in total_details
+                    if category == 'tr':
+                        continue
+                        
                     if not isinstance(items, dict):
                         updated_details[category] = items
                         continue
