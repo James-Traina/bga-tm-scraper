@@ -515,13 +515,13 @@ class TMScraper:
     
     def extract_version_from_gamereview(self, table_id: str) -> Optional[str]:
         """
-        Extract the version number from the gamereview page
+        Extract the version number from the gamereview page using multiple robust patterns
         
         Args:
             table_id: BGA table ID
             
         Returns:
-            str: Version number (e.g., "250604-1037") or None if not found
+            str: Version number (e.g., "250505-1448") or None if not found
         """
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
@@ -547,39 +547,105 @@ class TMScraper:
                 print("❌ Fatal error on page - gamereview might not be accessible")
                 return None
             
-            # Parse the HTML to find replay links
-            soup = BeautifulSoup(page_source, 'html.parser')
+            # Try multiple extraction patterns in order of reliability
+            version = self._extract_version_with_multiple_patterns(page_source, table_id)
             
-            # Look for links containing /archive/replay/
-            replay_links = soup.find_all('a', href=True)
-            
-            for link in replay_links:
-                href = link.get('href', '')
-                if '/archive/replay/' in href:
-                    # Extract version number using regex
-                    version_match = re.search(r'/archive/replay/(\d+-\d+)/', href)
-                    if version_match:
-                        version = version_match.group(1)
-                        logger.info(f"Found version number: {version}")
-                        print(f"✅ Found version number: {version}")
-                        return version
-            
-            # If no version found in links, try a broader search in the page source
-            version_matches = re.findall(r'/archive/replay/(\d+-\d+)/', page_source)
-            if version_matches:
-                version = version_matches[0]  # Take the first match
-                logger.info(f"Found version number in page source: {version}")
-                print(f"✅ Found version number in page source: {version}")
+            if version:
+                logger.info(f"Successfully extracted version: {version}")
+                print(f"✅ Found version number: {version}")
                 return version
-            
-            logger.warning(f"No version number found in gamereview page for table {table_id}")
-            print("⚠️  No version number found in gamereview page")
-            return None
+            else:
+                logger.warning(f"No version number found in gamereview page for table {table_id}")
+                print("⚠️  No version number found in gamereview page")
+                return None
             
         except Exception as e:
             logger.error(f"Error extracting version from gamereview for {table_id}: {e}")
             print(f"❌ Error extracting version: {e}")
             return None
+
+    def _extract_version_with_multiple_patterns(self, html_content: str, table_id: str) -> Optional[str]:
+        """
+        Extract version number using multiple patterns in order of reliability
+        
+        Args:
+            html_content: HTML content of the gamereview page
+            table_id: Table ID for logging purposes
+            
+        Returns:
+            str: Version number if found, None otherwise
+        """
+        logger.debug(f"Trying multiple version extraction patterns for table {table_id}")
+        
+        # Pattern definitions in order of reliability (most reliable first)
+        patterns = [
+            # Pattern 1: Direct replay links (most reliable)
+            (r'/archive/replay/(\d{6}-\d{4})/', "Direct replay links"),
+            
+            # Pattern 2: JavaScript variables
+            (r'version["\']?\s*:\s*["\'](\d{6}-\d{4})["\']', "JavaScript variables"),
+            
+            # Pattern 3: JSON data
+            (r'"version"\s*:\s*"(\d{6}-\d{4})"', "JSON data"),
+            
+            # Pattern 4: URL parameters
+            (r'[?&]version=(\d{6}-\d{4})', "URL parameters"),
+            
+            # Pattern 5: Data attributes
+            (r'data-version=["\'](\d{6}-\d{4})["\']', "Data attributes"),
+            
+            # Pattern 6: Hidden form fields
+            (r'<input[^>]*name=["\']version["\'][^>]*value=["\'](\d{6}-\d{4})["\']', "Hidden form fields"),
+            
+            # Pattern 7: Meta tags
+            (r'<meta[^>]*content=["\'](\d{6}-\d{4})["\']', "Meta tags"),
+            
+            # Pattern 8: Game data objects
+            (r'gamedata[^}]*version["\']?\s*:\s*["\'](\d{6}-\d{4})["\']', "Game data objects"),
+        ]
+        
+        # Try each pattern
+        for pattern, description in patterns:
+            try:
+                matches = re.findall(pattern, html_content, re.IGNORECASE)
+                if matches:
+                    # Remove duplicates and get the first unique match
+                    unique_matches = list(dict.fromkeys(matches))  # Preserves order
+                    version = unique_matches[0]
+                    
+                    logger.info(f"Version found using {description}: {version}")
+                    logger.debug(f"Pattern '{description}' found {len(matches)} total matches, using first unique: {version}")
+                    
+                    # Validate the version format (6 digits, dash, 4 digits)
+                    if re.match(r'^\d{6}-\d{4}$', version):
+                        return version
+                    else:
+                        logger.warning(f"Invalid version format from {description}: {version}")
+                        continue
+                        
+            except Exception as e:
+                logger.debug(f"Error with pattern '{description}': {e}")
+                continue
+        
+        # If no specific patterns worked, try a broader search as last resort
+        logger.debug("Trying broader version pattern search as fallback")
+        try:
+            # Look for any 6-digit-4-digit pattern
+            broad_matches = re.findall(r'(\d{6}-\d{4})', html_content)
+            if broad_matches:
+                # Remove duplicates and get the first one
+                unique_broad_matches = list(dict.fromkeys(broad_matches))
+                version = unique_broad_matches[0]
+                
+                logger.info(f"Version found using broad pattern search: {version}")
+                logger.debug(f"Broad search found {len(broad_matches)} total matches, using first unique: {version}")
+                return version
+                
+        except Exception as e:
+            logger.debug(f"Error with broad pattern search: {e}")
+        
+        logger.debug(f"No version number found using any pattern for table {table_id}")
+        return None
 
     def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
         """

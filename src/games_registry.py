@@ -145,16 +145,37 @@ class GamesRegistry:
                 'player_perspective': player_perspective
             }
     
-    def mark_game_parsed(self, table_id: str, parsed_at: Optional[str] = None) -> None:
+    def mark_game_parsed(self, table_id: str, parsed_at: Optional[str] = None, 
+                        player_perspective: Optional[str] = None) -> None:
         """Mark a game as successfully parsed"""
         if parsed_at is None:
             parsed_at = datetime.now().isoformat()
         
-        if table_id in self.registry_data:
-            self.registry_data[table_id]['parsed_at'] = parsed_at
+        # Create composite key
+        if player_perspective:
+            composite_key = f"{table_id}_{player_perspective}"
+        else:
+            composite_key = table_id
+        
+        # Try to find the game entry (check both composite key and table_id only)
+        game_entry = None
+        if composite_key in self.registry_data:
+            game_entry = self.registry_data[composite_key]
+        elif table_id in self.registry_data:
+            game_entry = self.registry_data[table_id]
+        else:
+            # Look for any entry with this table_id
+            for key, data in self.registry_data.items():
+                if data.get('table_id') == table_id:
+                    game_entry = data
+                    composite_key = key
+                    break
+        
+        if game_entry:
+            game_entry['parsed_at'] = parsed_at
         else:
             # If game wasn't tracked before, create minimal entry
-            self.registry_data[table_id] = {
+            self.registry_data[composite_key] = {
                 'table_id': table_id,
                 'raw_datetime': '',
                 'parsed_datetime': '',
@@ -162,7 +183,7 @@ class GamesRegistry:
                 'is_arena_mode': True,  # Default assumption
                 'scraped_at': None,
                 'parsed_at': parsed_at,
-                'player_perspective': None
+                'player_perspective': player_perspective
             }
     
     def is_game_checked(self, table_id: str, player_perspective: Optional[str] = None) -> bool:
