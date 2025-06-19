@@ -1064,6 +1064,9 @@ def process_single_player(player_id, retry_checked_games, no_scrape, filter_aren
                         )
                         games_added_to_registry += 1
                         
+                        # Save registry after each game to ensure data persistence
+                        games_registry.save_registry()
+                        
                     else:
                         print(f"❌ Failed to process game {table_id}")
                         
