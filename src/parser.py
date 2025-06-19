@@ -770,6 +770,62 @@ class Parser:
             logger.error(f"Error extracting award names: {e}")
             return {}
 
+    def _extract_hex_names(self, html_content: str) -> Dict[str, str]:
+        """Extract hex ID to name mappings from HTML hex map"""
+        hex_names = {}
+        
+        try:
+            # Pattern to match hex elements with data-name attributes
+            pattern = r'<div[^>]+id="(hex_\d+_\d+)"[^>]+data-name="([^"]+)"'
+            matches = re.findall(pattern, html_content)
+            
+            for hex_id, hex_name in matches:
+                hex_names[hex_id] = hex_name
+            
+            logger.info(f"Extracted {len(hex_names)} hex name mappings")
+            return hex_names
+            
+        except Exception as e:
+            logger.error(f"Error extracting hex names: {e}")
+            return {}
+
+    def _extract_tile_to_hex_mapping(self, gamelogs: Dict[str, Any]) -> Dict[str, str]:
+        """Extract tile ID to hex ID mappings from gamelogs"""
+        tile_to_hex = {}
+        
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    # Look for tile placement events
+                    args = data_item.get('args', {})
+                    if 'token_id' in args and 'place_id' in args:
+                        token_id = args['token_id']
+                        place_id = args['place_id']
+                        
+                        # Only map tile tokens to hex places
+                        if token_id.startswith('tile_') and place_id.startswith('hex_'):
+                            tile_to_hex[token_id] = place_id
+                            logger.debug(f"Mapped tile {token_id} to hex {place_id}")
+            
+            logger.info(f"Extracted {len(tile_to_hex)} tile-to-hex mappings")
+            return tile_to_hex
+            
+        except Exception as e:
+            logger.error(f"Error extracting tile-to-hex mapping: {e}")
+            return {}
+
     def _extract_g_gamelogs(self, html_content: str) -> Dict[str, Any]:
         """Extract g_gamelogs JSON with proper brace balancing"""
         try:
@@ -822,10 +878,17 @@ class Parser:
             return {}
     
     def _replace_ids_with_names(self, vp_data: Dict[str, Any], card_names: Dict[str, str], 
-                               milestone_names: Dict[str, str], award_names: Dict[str, str]) -> Dict[str, Any]:
-        """Replace ID references with actual names in VP data"""
+                               milestone_names: Dict[str, str], award_names: Dict[str, str],
+                               tile_to_hex: Dict[str, str] = None, hex_names: Dict[str, str] = None) -> Dict[str, Any]:
+        """Replace ID references with actual names in VP data, including hex information for tiles"""
         if not isinstance(vp_data, dict):
             return vp_data
+        
+        # Default to empty dicts if not provided
+        if tile_to_hex is None:
+            tile_to_hex = {}
+        if hex_names is None:
+            hex_names = {}
         
         updated_data = {}
         
@@ -863,7 +926,20 @@ class Parser:
                         elif category == 'awards' and item_id in award_names:
                             actual_name = award_names[item_id]
                         
-                        updated_items[actual_name] = item_data
+                        # Handle tile placement data (cities, greeneries, etc.)
+                        updated_item_data = dict(item_data) if isinstance(item_data, dict) else item_data
+                        
+                        if category in ['cities', 'greeneries'] and item_id.startswith('tile_'):
+                            # Use hex name as the key instead of tile ID
+                            hex_id = tile_to_hex.get(item_id)
+                            if hex_id:
+                                hex_name = hex_names.get(hex_id)
+                                if hex_name:
+                                    # Use hex name as the actual name instead of tile ID
+                                    actual_name = hex_name
+                                    logger.debug(f"Mapped tile {item_id} to hex name: {hex_name}")
+                        
+                        updated_items[actual_name] = updated_item_data
                     
                     updated_details[category] = updated_items
                 
@@ -879,6 +955,10 @@ class Parser:
         scoring_entries = []
         
         try:
+            # Extract hex mappings for tile placement data
+            hex_names = self._extract_hex_names_from_gamelogs_context(gamelogs)
+            tile_to_hex = self._extract_tile_to_hex_mapping(gamelogs)
+            
             data_entries = gamelogs.get('data', {}).get('data', [])
             
             for entry in data_entries:
@@ -898,9 +978,10 @@ class Parser:
                     if data_item.get('type') == 'scoringTable':
                         scoring_data = data_item.get('args', {}).get('data', {})
                         if scoring_data:
-                            # Replace IDs with names in the scoring data
+                            # Replace IDs with names in the scoring data, including hex information
                             scoring_data_with_names = self._replace_ids_with_names(
-                                scoring_data, card_names, milestone_names, award_names
+                                scoring_data, card_names, milestone_names, award_names,
+                                tile_to_hex, hex_names
                             )
                             
                             scoring_entry = {
@@ -917,6 +998,12 @@ class Parser:
         except Exception as e:
             logger.error(f"Error parsing scoring data from g_gamelogs: {e}")
             return []
+
+    def _extract_hex_names_from_gamelogs_context(self, gamelogs: Dict[str, Any]) -> Dict[str, str]:
+        """Extract hex names from the context where gamelogs are used (fallback method)"""
+        # This is a placeholder method - in practice, hex names should be extracted from HTML
+        # This method exists to maintain consistency when gamelogs are processed separately
+        return {}
     
     def _parse_milestone_award_data(self, gamelogs: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Parse milestone and award data from g_gamelogs"""
@@ -986,9 +1073,15 @@ class Parser:
         card_names = self._extract_card_names(html_content)
         milestone_names = self._extract_milestone_names(html_content)
         award_names = self._extract_award_names(html_content)
+        hex_names = self._extract_hex_names(html_content)
         
-        # Parse scoring data from g_gamelogs with name replacement
-        scoring_entries = self._parse_scoring_data_from_gamelogs(gamelogs, card_names, milestone_names, award_names)
+        # Extract tile-to-hex mapping from gamelogs
+        tile_to_hex = self._extract_tile_to_hex_mapping(gamelogs)
+        
+        # Parse scoring data from g_gamelogs with name replacement including hex information
+        scoring_entries = self._parse_scoring_data_from_gamelogs_with_hex(
+            gamelogs, card_names, milestone_names, award_names, tile_to_hex, hex_names
+        )
         
         vp_progression = []
         for i, entry in enumerate(scoring_entries):
@@ -1009,6 +1102,53 @@ class Parser:
         
         logger.info(f"Extracted VP progression with {len(vp_progression)} entries")
         return vp_progression
+
+    def _parse_scoring_data_from_gamelogs_with_hex(self, gamelogs: Dict[str, Any], card_names: Dict[str, str], 
+                                                  milestone_names: Dict[str, str], award_names: Dict[str, str],
+                                                  tile_to_hex: Dict[str, str], hex_names: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Parse scoring data from g_gamelogs entries with hex information included"""
+        scoring_entries = []
+        
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                # Look for data array within each entry
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    # Look for scoringTable type entries
+                    if data_item.get('type') == 'scoringTable':
+                        scoring_data = data_item.get('args', {}).get('data', {})
+                        if scoring_data:
+                            # Replace IDs with names in the scoring data, including hex information
+                            scoring_data_with_names = self._replace_ids_with_names(
+                                scoring_data, card_names, milestone_names, award_names,
+                                tile_to_hex, hex_names
+                            )
+                            
+                            scoring_entry = {
+                                'move_id': entry.get('move_id'),
+                                'time': entry.get('time'),
+                                'uid': data_item.get('uid'),
+                                'scoring_data': scoring_data_with_names
+                            }
+                            scoring_entries.append(scoring_entry)
+            
+            logger.info(f"Extracted {len(scoring_entries)} scoring entries with hex information from g_gamelogs")
+            return scoring_entries
+            
+        except Exception as e:
+            logger.error(f"Error parsing scoring data with hex information from g_gamelogs: {e}")
+            return []
     
     def _extract_vp_progression_fallback(self, html_content: str) -> List[Dict[str, Any]]:
         """Fallback VP progression extraction using the old regex method"""
