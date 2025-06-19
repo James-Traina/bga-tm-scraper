@@ -37,3 +37,52 @@ DEFAULT_PLAYER_COUNT = 100
 TOP_N_PLAYERS = 100
 SEASON_21_FILTER = True  # Only get Season 21 games
 TWO_PLAYER_ONLY = True   # Only get 2-player games
+
+# Speed settings for scraping
+# Choose one of the predefined speed profiles or create a custom one
+
+# Speed profile options: "FAST", "NORMAL", "SLOW", "CUSTOM"
+SPEED_PROFILE = "NORMAL"
+
+# Predefined speed profiles
+SPEED_PROFILES = {
+    "FAST": {
+        "page_load_delay": 2,
+        "click_delay": 0.3,
+        "gamereview_delay": 1.5,
+        "element_wait_timeout": 5
+    },
+    "NORMAL": {
+        "page_load_delay": 3,
+        "click_delay": 0.5,
+        "gamereview_delay": 2.5,
+        "element_wait_timeout": 8
+    },
+    "SLOW": {
+        "page_load_delay": 5,
+        "click_delay": 1.0,
+        "gamereview_delay": 4.0,
+        "element_wait_timeout": 12
+    },
+    "CUSTOM": {
+        "page_load_delay": 3,
+        "click_delay": 0.5,
+        "gamereview_delay": 2.5,
+        "element_wait_timeout": 8
+    }
+}
+
+# Current speed settings (automatically set based on SPEED_PROFILE)
+CURRENT_SPEED = SPEED_PROFILES[SPEED_PROFILE]
+
+# Speed setting descriptions:
+# - page_load_delay: Time to wait after navigating to a page (seconds)
+# - click_delay: Time to wait between clicks when auto-clicking "See more" (seconds)
+# - gamereview_delay: Time to wait for gamereview page to load (seconds)
+# - element_wait_timeout: Maximum time to wait for elements to appear (seconds)
+#
+# Recommendations:
+# - Use FAST for reliable internet and powerful computers
+# - Use NORMAL for typical setups (recommended for most users)
+# - Use SLOW for slower internet or if you encounter timeout errors
+# - Use CUSTOM and modify the values above if you need fine-tuned control

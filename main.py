@@ -5,6 +5,7 @@ import argparse
 import logging
 import json
 import os
+import csv
 from datetime import datetime
 
 from src.bga_session import BGASession
@@ -20,6 +21,147 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+def load_players_by_rank():
+    """Load players from players.csv ordered by ArenaRank"""
+    players = []
+    try:
+        with open('data/processed/players.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                players.append({
+                    'player_id': row['PlayerId'],
+                    'player_name': row['PlayerName'],
+                    'country': row['Country'],
+                    'arena_rank': int(row['ArenaRank'])
+                })
+        
+        # Sort by arena rank (should already be sorted, but ensure it)
+        players.sort(key=lambda x: x['arena_rank'])
+        return players
+    except FileNotFoundError:
+        print("❌ players.csv not found in data/processed/")
+        return []
+    except Exception as e:
+        print(f"❌ Error loading players.csv: {e}")
+        return []
+
+def get_player_summary_status(player_id):
+    """Get player processing status from their summary file"""
+    summary_file = f"data/processed/{player_id}/complete_summary.json"
+    
+    if not os.path.exists(summary_file):
+        return None
+    
+    try:
+        with open(summary_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"❌ Error reading summary for player {player_id}: {e}")
+        return None
+
+def check_arena_games_parsed_in_registry(player_id, games_registry):
+    """Check if all Arena games for this player perspective are parsed in the registry"""
+    all_games = games_registry.get_all_games()
+    
+    for table_id, game_data in all_games.items():
+        # Check if this game has the player's perspective and is Arena mode
+        if (game_data.get('player_perspective') == player_id and 
+            game_data.get('is_arena_mode', False) and 
+            not game_data.get('parsed_at')):
+            return False  # Found an unparsed Arena game
+    
+    return True  # All Arena games are parsed
+
+def is_player_processed(player_id, mode, games_registry):
+    """Check if a player has been fully processed based on the mode"""
+    summary = get_player_summary_status(player_id)
+    
+    if not summary:
+        return False  # No summary file means not processed
+    
+    # Check if discovery is complete
+    discovery_completed = summary.get('discovery_completed', False)
+    
+    if mode == 'no_scrape':
+        # In no-scrape mode, player is processed if discovery is complete
+        # When discovery is complete, ALL discovered games have been table-only checked
+        # (some may have been skipped as non-Arena, but they were still checked)
+        return discovery_completed
+    
+    elif mode == 'normal':
+        # In normal mode, player is processed if:
+        # 1. Discovery is complete AND
+        # 2. All discovered games are scraped AND
+        # 3. All Arena games in registry with this player's perspective are parsed
+        if not discovery_completed:
+            return False
+        
+        total_discovered = summary.get('total_games_discovered', 0)
+        successful_scrapes = summary.get('successful_scrapes', 0)
+        all_scraped = total_discovered == successful_scrapes
+        arena_games_parsed = check_arena_games_parsed_in_registry(player_id, games_registry)
+        return all_scraped and arena_games_parsed
+    
+    return False
+
+def save_player_summary(player_id, summary_data):
+    """Save player summary to their folder with discovery status tracking"""
+    player_dir = f"data/processed/{player_id}"
+    os.makedirs(player_dir, exist_ok=True)
+    
+    summary_file = os.path.join(player_dir, "complete_summary.json")
+    
+    # Add discovery status fields if not present
+    if 'discovery_completed' not in summary_data:
+        # Determine if discovery is complete based on whether we have games_data
+        games_data = summary_data.get('games_data', [])
+        total_games_found = summary_data.get('total_games_found', 0)
+        
+        # Discovery is complete if we have game data and it matches total_games_found
+        discovery_completed = len(games_data) > 0 and len(games_data) == total_games_found
+        
+        summary_data['discovery_completed'] = discovery_completed
+        if discovery_completed:
+            summary_data['discovery_completed_at'] = summary_data.get('scraped_at', datetime.now().isoformat())
+        summary_data['total_games_discovered'] = len(games_data)
+    
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+    
+    return summary_file
+
+def process_all_missing_arena_replays(games_registry, raw_data_dir):
+    """Process all missing Arena replays regardless of player (retry-checked-games mode)"""
+    print("🔍 Retry-checked-games mode: Processing all missing Arena replays...")
+    
+    # Get all Arena games from registry that haven't been scraped yet
+    all_registry_games = games_registry.get_all_games()
+    unscraped_arena_games = []
+    
+    for table_id, game_data in all_registry_games.items():
+        if (game_data.get('is_arena_mode', False) and 
+            not game_data.get('scraped_at')):
+            unscraped_arena_games.append(table_id)
+    
+    if not unscraped_arena_games:
+        print("✅ No unscraped Arena games found in registry")
+        return
+    
+    print(f"Found {len(unscraped_arena_games)} unscraped Arena games")
+    
+    # Use session-only approach for these games
+    scraping_results, parsing_results = scrape_with_session_only(
+        unscraped_arena_games, games_registry, raw_data_dir
+    )
+    
+    # Display results
+    successful_scrapes = len([r for r in scraping_results if r.get('success', False)])
+    successful_parses = len([r for r in parsing_results if r.get('success', False)])
+    
+    print(f"\n✅ Retry processing complete!")
+    print(f"   ✅ Successfully scraped: {successful_scrapes}")
+    print(f"   ✅ Successfully parsed: {successful_parses}")
 
 def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
     """
@@ -217,6 +359,8 @@ def main():
                        help='Retry games that have been previously checked but not successfully scraped (default: skip all previously checked games)')
     parser.add_argument('--no-scrape', action='store_true',
                        help='Only scrape table page and add entry to games.csv (skip replay scraping)')
+    parser.add_argument('--loop-players', action='store_true',
+                       help='Loop through players in players.csv ordered by ArenaRank')
     args = parser.parse_args()
     
     retry_checked_games = args.retry_checked_games
@@ -246,19 +390,6 @@ def main():
     from src.scraper import TMScraper
     from src.games_registry import GamesRegistry
     
-    # Get player ID from user
-    player_id = input("Enter the BGA player ID to scrape game history for: ").strip()
-    if not player_id:
-        print("❌ No player ID provided!")
-        return
-    
-    filter_arena_season_21 = True
-    
-    if filter_arena_season_21:
-        print("🎯 Arena season 21 filtering enabled - only games from 2025-04-08 to 2025-07-08 will be included")
-    else:
-        print("📅 No date filtering - all games will be included")
-    
     # Initialize games registry
     print("\n📋 Loading master games registry...")
     games_registry = GamesRegistry()
@@ -267,6 +398,91 @@ def main():
     # Create data directories
     os.makedirs(RAW_DATA_DIR, exist_ok=True)
     os.makedirs('data/processed', exist_ok=True)
+    
+    filter_arena_season_21 = True
+    
+    if filter_arena_season_21:
+        print("🎯 Arena season 21 filtering enabled - only games from 2025-04-08 to 2025-07-08 will be included")
+    else:
+        print("📅 No date filtering - all games will be included")
+    
+    # Handle different modes
+    if args.loop_players:
+        if retry_checked_games:
+            # Special case: retry mode processes all missing Arena replays regardless of player
+            process_all_missing_arena_replays(games_registry, RAW_DATA_DIR)
+            return
+        
+        # Load players and process them in order
+        print("\n👥 Loading players from players.csv...")
+        players = load_players_by_rank()
+        
+        if not players:
+            print("❌ No players found or error loading players.csv")
+            return
+        
+        print(f"Found {len(players)} players to process")
+        
+        # Determine processing mode for status checking
+        mode = 'no_scrape' if no_scrape else 'normal'
+        
+        processed_count = 0
+        for i, player in enumerate(players, 1):
+            player_id = player['player_id']
+            player_name = player['player_name']
+            arena_rank = player['arena_rank']
+            
+            print(f"\n--- Player {i}/{len(players)}: {player_name} (ID: {player_id}, Rank: {arena_rank}) ---")
+            
+            # Check if player is already processed
+            if is_player_processed(player_id, mode, games_registry):
+                continue  # Skip silently as requested
+            
+            print(f"🎯 Processing player {player_name} (Rank {arena_rank})...")
+            
+            try:
+                # Process this player using the existing single-player logic
+                success = process_single_player(player_id, retry_checked_games, no_scrape, 
+                                              filter_arena_season_21, games_registry, 
+                                              RAW_DATA_DIR, CHROMEDRIVER_PATH, REQUEST_DELAY)
+                
+                if success:
+                    processed_count += 1
+                    print(f"✅ Successfully processed player {player_name}")
+                else:
+                    # Check if we hit replay limit
+                    if success is False:  # Explicit False means replay limit hit
+                        print(f"🚫 Replay limit reached while processing {player_name}")
+                        print("Stopping player loop to respect BGA's daily limits.")
+                        break
+                    else:
+                        print(f"⚠️ Failed to process player {player_name}")
+                
+            except Exception as e:
+                print(f"❌ Error processing player {player_name}: {e}")
+                continue
+        
+        print(f"\n✅ Player loop complete! Processed {processed_count} players.")
+        return
+    
+    else:
+        # Original single-player mode
+        player_id = input("Enter the BGA player ID to scrape game history for: ").strip()
+        if not player_id:
+            print("❌ No player ID provided!")
+            return
+        
+        # Process single player
+        process_single_player(player_id, retry_checked_games, no_scrape, 
+                            filter_arena_season_21, games_registry, 
+                            RAW_DATA_DIR, CHROMEDRIVER_PATH, REQUEST_DELAY)
+
+def process_single_player(player_id, retry_checked_games, no_scrape, filter_arena_season_21, 
+                         games_registry, raw_data_dir, chromedriver_path, request_delay):
+    """Process a single player's game history. Returns True on success, False on replay limit, None on other errors."""
+    
+    # Import scraper here to avoid circular imports
+    from src.scraper import TMScraper
     
     # Check if we can use session-only mode for retry scenarios (before starting browser)
     use_session_only = False
@@ -328,7 +544,7 @@ def main():
                 games_registry.save_registry()
                 games_registry.print_stats()
                 
-                return  # Exit early since we're done
+                return True  # Success
             else:
                 print("❌ Some games missing table HTML or version numbers")
                 print("🌐 Will use browser mode for missing data...")
@@ -338,8 +554,8 @@ def main():
     # Initialize scraper (only if we're not using session-only mode)
     if not use_session_only:
         scraper = TMScraper(
-            chromedriver_path=CHROMEDRIVER_PATH,
-            request_delay=REQUEST_DELAY,
+            chromedriver_path=chromedriver_path,
+            request_delay=request_delay,
             headless=False  # Keep browser visible for manual login
         )
         
@@ -403,7 +619,7 @@ def main():
             if not new_games:
                 print(f"✅ No new games to process - all games already {filter_type}!")
                 games_registry.print_stats()
-                return
+                return True  # Success - no work needed
            
             table_ids_to_scrape = [game['table_id'] for game in new_games]
             
@@ -475,7 +691,7 @@ def main():
                             table_id=table_id,
                             player_perspective=player_id,  # Use the player ID as perspective
                             save_raw=True,
-                            raw_data_dir=RAW_DATA_DIR
+                            raw_data_dir=raw_data_dir
                         )
                     else:
                         print(f"Scraping game {table_id}...")
@@ -484,7 +700,7 @@ def main():
                             table_id=table_id,
                             player_perspective=player_id,  # Use the player ID as perspective
                             save_raw=True,
-                            raw_data_dir=RAW_DATA_DIR
+                            raw_data_dir=raw_data_dir
                         )
                     
                     if scraping_result:
@@ -508,7 +724,7 @@ def main():
                             # Save progress and exit gracefully
                             print(f"\n💾 Saving progress before stopping...")
                             games_registry.save_registry()
-                            break  # Exit the scraping loop
+                            return False  # Return False to indicate replay limit hit
                         
                         # Handle different scraping results
                         if scraping_result.get('success', False):
@@ -628,7 +844,7 @@ def main():
                                         # Extract player IDs from parsed data
                                         player_ids = []
                                         if hasattr(game_data, 'players') and isinstance(game_data.players, dict):
-                                            for player_id, player_obj in game_data.players.items():
+                                            for pid, player_obj in game_data.players.items():
                                                 player_ids.append(str(player_obj.player_id))
                                         else:
                                             # Fallback for different data structure
@@ -722,8 +938,7 @@ def main():
                 
                 clean_scraping_results.append(clean_result)
             
-            # Save comprehensive summary
-            scraping_summary_file = f"data/processed/player_{player_id}_complete_summary_{timestamp}.json"
+            # Save comprehensive summary to player folder
             scraping_summary = {
                 'player_id': player_id,
                 'scraped_at': datetime.now().isoformat(),
@@ -738,9 +953,7 @@ def main():
                 'parsing_results': parsing_results
             }
             
-            with open(scraping_summary_file, 'w', encoding='utf-8') as f:
-                json.dump(scraping_summary, f, indent=2, ensure_ascii=False)
-            
+            scraping_summary_file = save_player_summary(player_id, scraping_summary)
             print(f"💾 Complete summary saved to: {scraping_summary_file}")
             
             # Print detailed summary
@@ -789,6 +1002,8 @@ def main():
             # Always close browser
             print("\nClosing browser...")
             scraper.close_browser()
+    
+    return True  # Default success return
 
 if __name__ == "__main__":
     main()

@@ -74,10 +74,10 @@ class TMScraper:
         except ImportError:
             # Fallback to default settings if config not available
             self.speed_settings = {
-                "page_load_delay": 3,
-                "click_delay": 0.5,
-                "gamereview_delay": 2.5,
-                "element_wait_timeout": 8
+                "page_load_delay": 1,
+                "click_delay": 0.3,
+                "gamereview_delay": 1,
+                "element_wait_timeout": 5
             }
             self.speed_profile = "DEFAULT"
             logger.warning("Could not load speed settings from config, using defaults")
