@@ -32,6 +32,34 @@ def get_game_ids_from_args(args) -> List[str]:
     """Get game IDs from command line arguments"""
     game_ids = []
     
+    # If --from-csv argument provided, read from games.csv
+    if args.from_csv:
+        try:
+            import csv
+            with open('data/processed/games.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                parsed_games = set()
+                for row in reader:
+                    table_id = row['TableId']
+                    player_perspective = row['PlayerPerspective']
+                    parsed_at = row['ParsedAt']
+                    
+                    # Only include games that have been parsed (have ParsedAt timestamp)
+                    if parsed_at and table_id and player_perspective:
+                        # Create composite key for tracking
+                        composite_key = f"{table_id}:{player_perspective}"
+                        parsed_games.add(composite_key)
+                
+                print(f"📊 Found {len(parsed_games)} parsed game-perspective combinations in games.csv")
+                return list(parsed_games)
+                
+        except FileNotFoundError:
+            print(f"❌ games.csv not found in data/processed/")
+            return []
+        except Exception as e:
+            print(f"❌ Error reading games.csv: {e}")
+            return []
+    
     # If --file argument provided, read from file
     if args.file:
         try:
@@ -91,11 +119,21 @@ def get_game_ids_interactive() -> List[str]:
     
     return game_ids
 
-def check_html_files_exist(game_id: str) -> tuple[bool, str, str, str]:
-    """Check if required HTML files exist for a game ID and return player perspective"""
+def check_html_files_exist_for_perspective(game_id: str, player_perspective: str = None) -> tuple[bool, str, str, str]:
+    """Check if required HTML files exist for a specific game ID and player perspective"""
     import glob
     
-    # First check if files exist in root data/raw directory (old format)
+    # If player_perspective is specified, look in that specific folder
+    if player_perspective:
+        table_path = f"data/raw/{player_perspective}/table_{game_id}.html"
+        replay_path = f"data/raw/{player_perspective}/replay_{game_id}.html"
+        
+        if os.path.exists(table_path) and os.path.exists(replay_path):
+            return True, table_path, replay_path, player_perspective
+        else:
+            return False, table_path, replay_path, player_perspective
+    
+    # If no player_perspective specified, check root directory first (old format)
     table_path = f"data/raw/table_{game_id}.html"
     replay_path = f"data/raw/replay_{game_id}.html"
     
@@ -123,10 +161,22 @@ def check_html_files_exist(game_id: str) -> tuple[bool, str, str, str]:
     
     return False, table_path, replay_path, None
 
-def reparse_single_game(game_id: str) -> dict:
+def parse_composite_key(composite_key: str) -> tuple[str, str]:
+    """Parse composite key into game_id and player_perspective"""
+    if ':' in composite_key:
+        parts = composite_key.split(':', 1)
+        return parts[0], parts[1]
+    else:
+        # If no colon, treat as just game_id
+        return composite_key, None
+
+def reparse_single_game(composite_key: str) -> dict:
     """Reparse a single game and return result"""
+    # Parse composite key
+    game_id, expected_player_perspective = parse_composite_key(composite_key)
+    
     result = {
-        'game_id': game_id,
+        'game_id': composite_key,  # Store the full composite key for tracking
         'success': False,
         'error': None,
         'output_file': None,
@@ -136,8 +186,10 @@ def reparse_single_game(game_id: str) -> dict:
     }
     
     try:
-        # Check if HTML files exist
-        files_exist, table_path, replay_path, player_perspective = check_html_files_exist(game_id)
+        # Check if HTML files exist for the specific perspective
+        files_exist, table_path, replay_path, player_perspective = check_html_files_exist_for_perspective(
+            game_id, expected_player_perspective
+        )
         
         if not files_exist:
             missing_files = []
@@ -146,7 +198,8 @@ def reparse_single_game(game_id: str) -> dict:
             if not os.path.exists(replay_path):
                 missing_files.append(f"replay_{game_id}.html")
             
-            result['error'] = f"Missing files: {', '.join(missing_files)}"
+            perspective_info = f" (perspective: {expected_player_perspective})" if expected_player_perspective else ""
+            result['error'] = f"Missing files{perspective_info}: {', '.join(missing_files)}"
             return result
         
         # Read HTML files
@@ -258,6 +311,12 @@ Examples:
     parser.add_argument(
         '--file', '-f',
         help='File containing game IDs (one per line)'
+    )
+    
+    parser.add_argument(
+        '--from-csv',
+        action='store_true',
+        help='Read all parsed games from games.csv and reparse them from all player perspectives'
     )
     
     parser.add_argument(
