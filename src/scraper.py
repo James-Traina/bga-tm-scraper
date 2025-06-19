@@ -19,6 +19,8 @@ from .bga_hybrid_session import BGAHybridSession
 
 logger = logging.getLogger(__name__)
 
+from config import TERRAFORMING_MARS_GAME_ID
+
 # Arena Season 21 date range constants
 ARENA_SEASON_21_START = datetime(2025, 4, 8)
 ARENA_SEASON_21_END = datetime(2025, 7, 8, 23, 59, 59)  # End of day
@@ -769,7 +771,7 @@ class TMScraper:
             click_delay = self.speed_settings.get('click_delay', 0.5)
         
         # Construct player history URL - this may need to be adjusted based on actual BGA URL pattern
-        player_url = f"https://boardgamearena.com/gamestats?player={player_id}&opponent_id=0&game_id=1924&finished=1"        
+        player_url = f"https://boardgamearena.com/gamestats?player={player_id}&opponent_id=0&game_id={TERRAFORMING_MARS_GAME_ID}&finished=1"        
         logger.info(f"Scraping game history for player {player_id}")
         
         try:
