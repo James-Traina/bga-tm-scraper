@@ -174,8 +174,7 @@ def process_all_missing_arena_replays(games_registry, raw_data_dir):
     # Extract table IDs for processing
     table_ids_to_process = [game['table_id'] for game in games_to_retry]
     
-    # Use session-only approach for these games
-    scraping_results, parsing_results = scrape_with_session_only(
+    scraping_results, parsing_results = scrape_with_browser_retry(
         table_ids_to_process, games_registry, raw_data_dir
     )
     
@@ -422,9 +421,9 @@ def extract_version_with_multiple_patterns(html_content, table_id):
     logger.debug(f"No version number found using any pattern for table {table_id}")
     return None
 
-def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
+def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir):
     """
-    Scrape replays using session-only approach (no browser) for retry scenarios
+    Scrape replays using browser-based approach for retry scenarios
     
     Args:
         table_ids_to_scrape: List of table IDs to process
@@ -691,7 +690,7 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                         'table_id': table_id,
                         'scraped_at': datetime.now().isoformat(),
                         'success': True,
-                        'session_only': True,
+                    'browser_based': True,
                         'table_data': {'from_file': True},
                         'replay_data': {
                             'url': replay_url,
@@ -709,7 +708,7 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                         'table_id': table_id,
                         'scraped_at': game_info.get('scraped_at', datetime.now().isoformat()) if game_info else datetime.now().isoformat(),
                         'success': True,
-                        'session_only': True,
+                        'browser_based': True,
                         'table_data': {'from_file': True},
                         'replay_data': {
                             'html_length': len(replay_html),
@@ -738,10 +737,10 @@ def scrape_with_session_only(table_ids_to_scrape, games_registry, raw_data_dir):
                     'moves_count': len(game_data.moves),
                     'elo_data_included': game_data.metadata.get('elo_data_included', False),
                     'elo_players_found': game_data.metadata.get('elo_players_found', 0),
-                    'session_only': True
+                    'browser_based': True
                 })
                 
-                print(f"✅ Successfully processed game {table_id} (session-only)")
+                print(f"✅ Successfully processed game {table_id}")
                 print(f"   Players: {len(game_data.players)}, Moves: {len(game_data.moves)}")
                 
                 # Mark as parsed
