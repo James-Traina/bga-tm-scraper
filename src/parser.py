@@ -127,7 +127,7 @@ class Parser:
         vp_progression = self._extract_vp_progression(html_content)
         
         # Build game states for each move
-        moves_with_states = self._build_game_states(moves, vp_progression, players_info)
+        moves_with_states = self._build_game_states(moves, vp_progression, players_info, gamelogs)
         
         # Add comprehensive resource/production/tag tracking if gamelogs available
         tracking_progression = []
@@ -580,6 +580,124 @@ class Parser:
         
         return changes
     
+    def _extract_parameter_changes_from_description(self, description: str) -> Dict[str, int]:
+        """Extract terraforming parameter changes from move description text"""
+        changes = {}
+        
+        # Temperature changes - look for patterns like "Temperature increases by 1 step to a value of -26"
+        temp_patterns = [
+            r'Temperature.*?increases.*?by \d+ step.*?to a value of (-?\d+)',
+            r'increases.*?Temperature.*?by \d+ step.*?to a value of (-?\d+)',
+            r'Temperature.*?to a value of (-?\d+)',
+            r'Temperature.*?(-?\d+)°C'
+        ]
+        
+        for pattern in temp_patterns:
+            temp_match = re.search(pattern, description, re.IGNORECASE)
+            if temp_match:
+                changes['temperature'] = int(temp_match.group(1))
+                logger.debug(f"Found temperature change: {temp_match.group(1)}")
+                break
+        
+        # Oxygen changes - look for patterns like "Oxygen Level increases by 1 step to a value of 5"
+        oxygen_patterns = [
+            r'Oxygen Level.*?increases.*?by \d+ step.*?to a value of (\d+)',
+            r'increases.*?Oxygen Level.*?by \d+ step.*?to a value of (\d+)',
+            r'Oxygen Level.*?to a value of (\d+)',
+            r'Oxygen.*?(\d+)%'
+        ]
+        
+        for pattern in oxygen_patterns:
+            oxygen_match = re.search(pattern, description, re.IGNORECASE)
+            if oxygen_match:
+                changes['oxygen'] = int(oxygen_match.group(1))
+                logger.debug(f"Found oxygen change: {oxygen_match.group(1)}")
+                break
+        
+        # Ocean changes - look for patterns like "Oceans increases by 1 step to a value of 3"
+        ocean_patterns = [
+            r'Oceans.*?increases.*?by \d+ step.*?to a value of (\d+)',
+            r'increases.*?Oceans.*?by \d+ step.*?to a value of (\d+)',
+            r'Oceans.*?to a value of (\d+)',
+            r'Ocean.*?(\d+)'
+        ]
+        
+        for pattern in ocean_patterns:
+            ocean_match = re.search(pattern, description, re.IGNORECASE)
+            if ocean_match:
+                changes['oceans'] = int(ocean_match.group(1))
+                logger.debug(f"Found ocean change: {ocean_match.group(1)}")
+                break
+        
+        return changes
+    
+    def _extract_parameter_changes_from_gamelogs(self, gamelogs: Dict[str, Any]) -> Dict[int, Dict[str, int]]:
+        """Extract terraforming parameter changes from gamelogs JSON data"""
+        parameter_changes_by_move = {}
+        
+        try:
+            data_entries = gamelogs.get('data', {}).get('data', [])
+            
+            for entry in data_entries:
+                if not isinstance(entry, dict):
+                    continue
+                
+                move_id = entry.get('move_id')
+                if not move_id:
+                    continue
+                
+                try:
+                    move_number = int(move_id)
+                except (ValueError, TypeError):
+                    continue
+                
+                # Process all data items in this move
+                entry_data = entry.get('data', [])
+                if not isinstance(entry_data, list):
+                    continue
+                
+                move_changes = {}
+                
+                for data_item in entry_data:
+                    if not isinstance(data_item, dict):
+                        continue
+                    
+                    # Look for counter updates with global parameter trackers
+                    if data_item.get('type') == 'counter':
+                        args = data_item.get('args', {})
+                        token_name = args.get('token_name', '')
+                        counter_value = args.get('counter_value')
+                        
+                        if counter_value is not None:
+                            try:
+                                value = int(counter_value)
+                                
+                                # Map tracker names to parameters
+                                if token_name == 'tracker_t':  # Temperature
+                                    move_changes['temperature'] = value
+                                    logger.debug(f"Move {move_number}: Found temperature = {value}")
+                                elif token_name == 'tracker_o':  # Oxygen
+                                    move_changes['oxygen'] = value
+                                    logger.debug(f"Move {move_number}: Found oxygen = {value}")
+                                elif token_name == 'tracker_w':  # Oceans
+                                    move_changes['oceans'] = value
+                                    logger.debug(f"Move {move_number}: Found oceans = {value}")
+                                    
+                            except (ValueError, TypeError):
+                                continue
+                
+                # Store changes for this move if any were found
+                if move_changes:
+                    parameter_changes_by_move[move_number] = move_changes
+                    logger.debug(f"Move {move_number}: Parameter changes = {move_changes}")
+            
+            logger.info(f"Extracted parameter changes for {len(parameter_changes_by_move)} moves from gamelogs")
+            return parameter_changes_by_move
+            
+        except Exception as e:
+            logger.error(f"Error extracting parameter changes from gamelogs: {e}")
+            return {}
+    
     def _map_tracker_to_resource(self, tracker: str, title: str) -> str:
         """Map tracker code to resource name"""
         mapping = {
@@ -646,7 +764,7 @@ class Parser:
             else:
                 return max(0, value)  # Other resources can't be negative
 
-    def _build_game_states(self, moves: List[Move], vp_progression: List[Dict[str, Any]], players_info: Dict[str, Player]) -> List[Move]:
+    def _build_game_states(self, moves: List[Move], vp_progression: List[Dict[str, Any]], players_info: Dict[str, Player], gamelogs: Dict[str, Any] = None) -> List[Move]:
         """Build game states for each move with VP, milestone, and award tracking"""
         # Initialize tracking variables
         current_temp = -30
@@ -686,6 +804,12 @@ class Parser:
         
         logger.info(f"Built VP mapping for {len(vp_by_move_number)} moves")
         
+        # Extract parameter changes from gamelogs if available
+        parameter_changes_by_move = {}
+        if gamelogs:
+            parameter_changes_by_move = self._extract_parameter_changes_from_gamelogs(gamelogs)
+            logger.info(f"Extracted parameter changes for {len(parameter_changes_by_move)} moves from gamelogs")
+        
         # Process each move and build game state
         for i, move in enumerate(moves):
             # Update generation
@@ -694,15 +818,18 @@ class Parser:
                 if gen_match:
                     current_generation = int(gen_match.group(1))
             
-            # Extract parameter changes from move description if needed
-            parameter_changes = self._extract_parameter_changes_detailed([])  # Pass empty list since we're extracting from description
-            if parameter_changes:
-                if 'temperature' in parameter_changes:
-                    current_temp = parameter_changes['temperature']
-                if 'oxygen' in parameter_changes:
-                    current_oxygen = parameter_changes['oxygen']
-                if 'oceans' in parameter_changes:
-                    current_oceans = parameter_changes['oceans']
+            # Update parameters from gamelogs data
+            move_parameter_changes = parameter_changes_by_move.get(move.move_number, {})
+            if move_parameter_changes:
+                if 'temperature' in move_parameter_changes:
+                    current_temp = move_parameter_changes['temperature']
+                    logger.debug(f"Move {move.move_number}: Temperature updated to {current_temp}")
+                if 'oxygen' in move_parameter_changes:
+                    current_oxygen = move_parameter_changes['oxygen']
+                    logger.debug(f"Move {move.move_number}: Oxygen updated to {current_oxygen}")
+                if 'oceans' in move_parameter_changes:
+                    current_oceans = move_parameter_changes['oceans']
+                    logger.debug(f"Move {move.move_number}: Oceans updated to {current_oceans}")
             
             # Update milestone and award tracking
             if move.action_type == 'claim_milestone':

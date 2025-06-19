@@ -91,15 +91,37 @@ def get_game_ids_interactive() -> List[str]:
     
     return game_ids
 
-def check_html_files_exist(game_id: str) -> tuple[bool, str, str]:
-    """Check if required HTML files exist for a game ID"""
+def check_html_files_exist(game_id: str) -> tuple[bool, str, str, str]:
+    """Check if required HTML files exist for a game ID and return player perspective"""
+    import glob
+    
+    # First check if files exist in root data/raw directory (old format)
     table_path = f"data/raw/table_{game_id}.html"
     replay_path = f"data/raw/replay_{game_id}.html"
     
-    table_exists = os.path.exists(table_path)
-    replay_exists = os.path.exists(replay_path)
+    if os.path.exists(table_path) and os.path.exists(replay_path):
+        return True, table_path, replay_path, None
     
-    return table_exists and replay_exists, table_path, replay_path
+    # Check in player perspective folders (new format)
+    # Look for table file in any player perspective folder
+    table_pattern = f"data/raw/*/table_{game_id}.html"
+    table_matches = glob.glob(table_pattern)
+    
+    # Look for replay file in any player perspective folder
+    replay_pattern = f"data/raw/*/replay_{game_id}.html"
+    replay_matches = glob.glob(replay_pattern)
+    
+    if table_matches and replay_matches:
+        # Extract player perspective from the path
+        table_path = table_matches[0]
+        replay_path = replay_matches[0]
+        
+        # Extract player ID from path like "data/raw/96014413/table_687877071.html"
+        player_perspective = os.path.basename(os.path.dirname(table_path))
+        
+        return True, table_path, replay_path, player_perspective
+    
+    return False, table_path, replay_path, None
 
 def reparse_single_game(game_id: str) -> dict:
     """Reparse a single game and return result"""
@@ -115,7 +137,7 @@ def reparse_single_game(game_id: str) -> dict:
     
     try:
         # Check if HTML files exist
-        files_exist, table_path, replay_path = check_html_files_exist(game_id)
+        files_exist, table_path, replay_path, player_perspective = check_html_files_exist(game_id)
         
         if not files_exist:
             missing_files = []
@@ -129,6 +151,8 @@ def reparse_single_game(game_id: str) -> dict:
         
         # Read HTML files
         print(f"📖 Reading HTML files for game {game_id}...")
+        if player_perspective:
+            print(f"   Found files in player perspective folder: {player_perspective}")
         
         with open(table_path, 'r', encoding='utf-8') as f:
             table_html = f.read()
@@ -148,10 +172,15 @@ def reparse_single_game(game_id: str) -> dict:
             table_id=game_id
         )
         
-        # Export to JSON
-        output_path = f"data/parsed/game_{game_id}.json"
-        print(f"💾 Saving to {output_path}...")
-        parser.export_to_json(game_data, output_path)
+        # Export to JSON with player perspective if available
+        if player_perspective:
+            output_path = f"data/parsed/{player_perspective}/game_{game_id}.json"
+            print(f"💾 Saving to {output_path} (player perspective: {player_perspective})...")
+            parser.export_to_json(game_data, output_path)
+        else:
+            output_path = f"data/parsed/game_{game_id}.json"
+            print(f"💾 Saving to {output_path}...")
+            parser.export_to_json(game_data, output_path)
         
         # Update result
         result['success'] = True
