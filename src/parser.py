@@ -620,6 +620,24 @@ class Parser:
         current_milestones = {}
         current_awards = {}
         
+        # Initialize default VP data for all players
+        default_vp_data = {}
+        for player_id in players_info.keys():
+            default_vp_data[player_id] = {
+                "total": 20,
+                "total_details": {
+                    "tr": 20,
+                    "awards": 0,
+                    "milestones": 0,
+                    "cities": 0,
+                    "greeneries": 0,
+                    "cards": 0
+                }
+            }
+        
+        # Track the last known VP data to carry forward when no new data is available
+        last_vp_data = dict(default_vp_data)
+        
         # Create a mapping from move_id to VP data for proper correlation
         vp_by_move_id = {}
         for vp_entry in vp_progression:
@@ -672,28 +690,21 @@ class Parser:
             # Get VP data for this move by matching move_number with move_id
             move_vp_data = vp_by_move_id.get(str(move.move_number), {})
             
-            # Initialize player_vp on move_index 1 if no VP data available yet
-            if move.move_number == 1 and not move_vp_data:
-                move_vp_data = {}
-                for player_id in players_info.keys():
-                    move_vp_data[player_id] = {
-                        "total": 20,
-                        "total_details": {
-                            "tr": 20,
-                            "awards": 0,
-                            "milestones": 0,
-                            "cities": 0,
-                            "greeneries": 0,
-                            "cards": 0
-                        }
-                    }
-                logger.info(f"Initialized player_vp for move 1 with {len(move_vp_data)} players")
-            
-            # Log when we find VP data for debugging
+            # Ensure VP data is always present
             if move_vp_data:
-                logger.debug(f"Found VP data for move {move.move_number}")
+                # Update last known VP data with new data
+                last_vp_data = dict(move_vp_data)
+                logger.debug(f"Updated VP data for move {move.move_number}")
             else:
-                logger.debug(f"No VP data found for move {move.move_number}")
+                # Use last known VP data if no new data available
+                move_vp_data = dict(last_vp_data)
+                logger.debug(f"Using carried-forward VP data for move {move.move_number}")
+            
+            # Ensure all players have VP data (fill in missing players with defaults)
+            for player_id in players_info.keys():
+                if player_id not in move_vp_data:
+                    move_vp_data[player_id] = dict(default_vp_data[player_id])
+                    logger.debug(f"Added default VP data for missing player {player_id} in move {move.move_number}")
             
             # Create game state (without resource/production tracking)
             game_state = GameState(
