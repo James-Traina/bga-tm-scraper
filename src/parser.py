@@ -1469,14 +1469,46 @@ class Parser:
         logger.info(f"Tracker dictionary has {len(tracker_dict)} mappings")
         
         try:
-            # Initialize tracking data with actual player IDs and all trackers set to 0
+            # Initialize tracking data with actual player IDs and only player-specific trackers
             player_data = {}
-            all_tracker_names = set(tracker_dict.values())
+            
+            # Filter tracker_dict to only include player-specific trackers (those with color codes)
+            player_specific_trackers = {}
+            for tracker_id, display_name in tracker_dict.items():
+                # Check if tracker ID ends with a 6-character hex color code
+                if re.search(r'_[a-f0-9]{6}$', tracker_id, re.IGNORECASE):
+                    player_specific_trackers[tracker_id] = display_name
+            
+            logger.info(f"Found {len(player_specific_trackers)} player-specific trackers out of {len(tracker_dict)} total")
+            
+            # Get unique display names from player-specific trackers only
+            player_tracker_names = set(player_specific_trackers.values())
+            
+            # Also filter out global trackers by name patterns
+            global_tracker_patterns = [
+                'Temperature', 'Oxygen Level', 'Oceans', 'TR', 'Global Parameters Delta',
+                'Number of Greenery on Mars', 'Number of owned land', 'Number of Cities',
+                'Number of Cities on Mars', 'Pass'
+            ]
+            
+            # Remove global trackers from player tracker names
+            filtered_tracker_names = set()
+            for tracker_name in player_tracker_names:
+                is_global = False
+                for pattern in global_tracker_patterns:
+                    if pattern in tracker_name:
+                        is_global = True
+                        break
+                if not is_global:
+                    filtered_tracker_names.add(tracker_name)
+            
+            player_tracker_names = filtered_tracker_names
+            logger.info(f"After filtering global trackers: {len(player_tracker_names)} player-specific tracker names")
             
             for player_id in player_ids:
-                player_data[int(player_id)] = {tracker_name: 0 for tracker_name in all_tracker_names}
+                player_data[int(player_id)] = {tracker_name: 0 for tracker_name in player_tracker_names}
             
-            logger.info(f"Initialized {len(all_tracker_names)} trackers for each player")
+            logger.info(f"Initialized {len(player_tracker_names)} player-specific trackers for each player")
             
             tracking_progression = []
             
