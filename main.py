@@ -730,7 +730,8 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
                 game_data = parser.parse_complete_game_with_elo(
                     replay_html=replay_html,
                     table_html=table_html,
-                    table_id=table_id
+                    table_id=table_id,
+                    player_perspective=player_id
                 )
                 
                 # Export to JSON with player perspective

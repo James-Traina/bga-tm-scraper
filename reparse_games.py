@@ -234,7 +234,8 @@ def reparse_single_game(composite_key: str, games_registry=None) -> dict:
         game_data = parser.parse_complete_game_with_elo(
             replay_html=replay_html,
             table_html=table_html,
-            table_id=game_id
+            table_id=game_id,
+            player_perspective=player_perspective
         )
         
         # Export to JSON with player perspective if available
