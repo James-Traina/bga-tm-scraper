@@ -253,7 +253,7 @@ def get_current_site_version(session):
     Get the current site version from BGA main page
     
     Args:
-        session: BGASession instance
+        session: BGAHybridSession instance
         
     Returns:
         str: Current site version or None if not found

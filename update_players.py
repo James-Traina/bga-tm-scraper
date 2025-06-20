@@ -10,7 +10,7 @@ import sys
 import os
 from datetime import datetime
 
-from bga_tm_scraper.bga_session import BGASession
+from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
 from bga_tm_scraper.leaderboard_scraper import LeaderboardScraper
 from bga_tm_scraper.players_registry import PlayersRegistry
 
@@ -85,17 +85,32 @@ def main():
         logger.error("Please update BGA_EMAIL in config.py with your actual credentials")
         sys.exit(1)
     
+    # Validate ChromeDriver configuration
+    if not hasattr(config, 'CHROMEDRIVER_PATH'):
+        logger.error("CHROMEDRIVER_PATH must be set in config.py")
+        sys.exit(1)
+    
+    if 'C:\\path\\to\\chromedriver.exe' in config.CHROMEDRIVER_PATH:
+        logger.error("Please update CHROMEDRIVER_PATH in config.py with the actual path to ChromeDriver")
+        sys.exit(1)
+    
+    session = None
     try:
-        # Initialize BGA session
-        logger.info("Initializing BGA session...")
-        session = BGASession(config.BGA_EMAIL, config.BGA_PASSWORD)
+        # Initialize BGA hybrid session
+        logger.info("Initializing BGA hybrid session...")
+        session = BGAHybridSession(
+            email=config.BGA_EMAIL,
+            password=config.BGA_PASSWORD,
+            chromedriver_path=config.CHROMEDRIVER_PATH,
+            headless=True
+        )
         
         # Login
         if not session.login():
             logger.error("Failed to login to BGA")
             sys.exit(1)
         
-        # Initialize scraper
+        # Initialize scraper with the hybrid session (now has compatibility methods)
         scraper = LeaderboardScraper(session)
         
         # Fetch players data
@@ -134,6 +149,14 @@ def main():
             import traceback
             traceback.print_exc()
         sys.exit(1)
+    finally:
+        # Clean up resources
+        if session:
+            try:
+                session.close_browser()
+                logger.debug("Browser session closed")
+            except Exception as e:
+                logger.debug(f"Error closing browser session: {e}")
 
 
 if __name__ == '__main__':

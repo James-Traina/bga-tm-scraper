@@ -396,6 +396,46 @@ class BGAHybridSession:
             raise RuntimeError("Browser not authenticated. Call login() first.")
         return self.driver
     
+    def get(self, url: str, **kwargs) -> requests.Response:
+        """
+        Make authenticated GET request (compatibility method for LeaderboardScraper)
+        
+        Args:
+            url: URL to request
+            **kwargs: Additional arguments for requests
+            
+        Returns:
+            requests.Response: Response object
+        """
+        if not self.is_session_logged_in:
+            raise RuntimeError("Session not authenticated. Call login() first.")
+        return self.session.get(url, **kwargs)
+    
+    def post(self, url: str, **kwargs) -> requests.Response:
+        """
+        Make authenticated POST request (compatibility method for LeaderboardScraper)
+        
+        Args:
+            url: URL to request
+            **kwargs: Additional arguments for requests
+            
+        Returns:
+            requests.Response: Response object
+        """
+        if not self.is_session_logged_in:
+            raise RuntimeError("Session not authenticated. Call login() first.")
+        return self.session.post(url, **kwargs)
+    
+    @property
+    def is_logged_in(self) -> bool:
+        """
+        Check if session is logged in (compatibility property for LeaderboardScraper)
+        
+        Returns:
+            bool: True if session is authenticated
+        """
+        return self.is_session_logged_in
+    
     def close_browser(self):
         """Close the browser if it's open"""
         if self.driver:
