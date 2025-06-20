@@ -5,7 +5,7 @@ Fetches Arena Leaderboard data from BoardGameArena
 
 import logging
 from typing import List, Tuple, Optional
-from bga_session import BGASession
+from .bga_session import BGASession
 
 logger = logging.getLogger(__name__)
 

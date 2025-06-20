@@ -41,8 +41,8 @@ def main():
         return
     
     # Import required modules
-    from src.scraper import TMScraper
-    from src.games_registry import GamesRegistry
+    from bga_tm_scraper.scraper import TMScraper
+    from bga_tm_scraper.games_registry import GamesRegistry
     
     # Initialize games registry
     print("📋 Loading master games registry...")

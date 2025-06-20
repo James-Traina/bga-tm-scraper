@@ -11,8 +11,6 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Setup logging
 logging.basicConfig(
@@ -226,7 +224,7 @@ def reparse_single_game(composite_key: str, games_registry=None) -> dict:
             replay_html = f.read()
         
         # Initialize parser
-        from src.parser import Parser
+        from bga_tm_scraper.parser import Parser
         parser = Parser()
         
         # Parse the game with ELO data
@@ -366,7 +364,7 @@ Examples:
     setup_directories()
     
     # Initialize games registry
-    from src.games_registry import GamesRegistry
+    from bga_tm_scraper.games_registry import GamesRegistry
     games_registry = GamesRegistry()
     print(f"📋 Loaded games registry with {len(games_registry.get_all_games())} games")
     

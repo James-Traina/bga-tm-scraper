@@ -208,7 +208,7 @@ class TMScraper:
             
             # Step 3: Extract player information using parser
             logger.info("Extracting player information...")
-            from src.parser import Parser
+            from .parser import Parser
             parser = Parser()
             elo_data = parser.parse_elo_data(table_data['html_content'])
             
@@ -1600,7 +1600,7 @@ class TMScraper:
                 return False, None, None
             
             # Check if version is available in games registry
-            from src.games_registry import GamesRegistry
+            from .games_registry import GamesRegistry
             games_registry = GamesRegistry()
             game_info = games_registry.get_game_info(table_id)
             
@@ -2003,7 +2003,7 @@ class TMScraper:
         
         try:
             # Get valid player IDs from VP data first (this is fast and reliable)
-            from src.parser import Parser
+            from .parser import Parser
             parser = Parser()
             vp_data = parser._extract_vp_data_from_html(html_content)
             valid_player_ids = list(vp_data.keys())
@@ -2073,7 +2073,7 @@ class TMScraper:
         """
         try:
             # Import parser to use its ELO parsing functionality
-            from src.parser import Parser
+            from .parser import Parser
             parser = Parser()
             
             # Parse ELO data from the table HTML

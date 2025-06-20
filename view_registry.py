@@ -4,7 +4,7 @@ Utility script to view and manage the master games registry
 
 import json
 import sys
-from src.games_registry import GamesRegistry
+from bga_tm_scraper.games_registry import GamesRegistry
 
 
 def main():

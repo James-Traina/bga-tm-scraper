@@ -12,8 +12,6 @@ from typing import List, Optional, Tuple
 from datetime import datetime
 import time
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Setup logging
 logging.basicConfig(
@@ -416,7 +414,7 @@ def reprocess_single_game(composite_key: str, games_registry, session) -> dict:
             table_html = f.read()
         
         # Parse the complete game
-        from src.parser import Parser
+        from bga_tm_scraper.parser import Parser
         parser = Parser()
         
         print(f"🔄 Parsing complete game {game_id}...")
@@ -502,7 +500,7 @@ def get_game_ids_from_args(args) -> List[str]:
     
     # If --find-missing argument provided, scan registry
     if args.find_missing:
-        from src.games_registry import GamesRegistry
+        from bga_tm_scraper.games_registry import GamesRegistry
         games_registry = GamesRegistry()
         return find_games_needing_reprocessing(games_registry)
     
@@ -672,7 +670,7 @@ Examples:
         return
     
     # Initialize games registry
-    from src.games_registry import GamesRegistry
+    from bga_tm_scraper.games_registry import GamesRegistry
     games_registry = GamesRegistry()
     print(f"📋 Loaded games registry with {len(games_registry.get_all_games())} games")
     
@@ -699,7 +697,7 @@ Examples:
     print("=" * 50)
     
     # Initialize BGAHybridSession
-    from src.bga_hybrid_session import BGAHybridSession
+    from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
     
     print("🔐 Initializing hybrid session (headless Chrome)...")
     session = BGAHybridSession(

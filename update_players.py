@@ -10,12 +10,9 @@ import sys
 import os
 from datetime import datetime
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
-from bga_session import BGASession
-from leaderboard_scraper import LeaderboardScraper
-from players_registry import PlayersRegistry
+from bga_tm_scraper.bga_session import BGASession
+from bga_tm_scraper.leaderboard_scraper import LeaderboardScraper
+from bga_tm_scraper.players_registry import PlayersRegistry
 
 # Import config
 try:

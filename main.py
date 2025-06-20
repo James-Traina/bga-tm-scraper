@@ -10,7 +10,7 @@ import re
 import time
 from datetime import datetime
 
-from src.bga_hybrid_session import BGAHybridSession
+from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
 
 # Setup logging with UTF-8 encoding to handle Unicode characters (emojis)
 logging.basicConfig(
@@ -458,7 +458,7 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
         print("✅ Hybrid session login successful!")
         
         # Initialize parser
-        from src.parser import Parser
+        from bga_tm_scraper.parser import Parser
         parser = Parser()
         
         scraping_results = []
@@ -577,7 +577,7 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
                     print(f"✅ Using PlayerPerspective from registry: {player_id}")
                 else:
                     # Fallback: Extract player IDs from table HTML
-                    from src.scraper import TMScraper
+                    from bga_tm_scraper.scraper import TMScraper
                     temp_scraper = TMScraper("", 0)  # Dummy scraper for ID extraction
                     player_ids = temp_scraper.extract_player_ids_from_table(table_html)
                     
@@ -821,8 +821,8 @@ def main():
         return
     
     # Import scraper module
-    from src.scraper import TMScraper
-    from src.games_registry import GamesRegistry
+    from bga_tm_scraper.scraper import TMScraper
+    from bga_tm_scraper.games_registry import GamesRegistry
     
     # Initialize games registry
     print("\n📋 Loading master games registry...")
@@ -916,7 +916,7 @@ def process_single_player(player_id, retry_checked_games, no_scrape, filter_aren
     """Process a single player's game history. Returns True on success, False on replay limit, None on other errors."""
     
     # Import scraper here to avoid circular imports
-    from src.scraper import TMScraper
+    from bga_tm_scraper.scraper import TMScraper
     
     # Check if we can use session-only mode for retry scenarios (before starting browser)
     use_session_only = False
