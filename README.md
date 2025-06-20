@@ -1,6 +1,6 @@
 # Terraforming Mars BGA Scraper
 
-A comprehensive Python tool for scraping and parsing Terraforming Mars game replays from BoardGameArena with ELO tracking and Arena mode detection.
+A Python CLI tool for scraping and parsing Terraforming Mars game replays from BoardGameArena.
 
 ## Table of Contents
 
