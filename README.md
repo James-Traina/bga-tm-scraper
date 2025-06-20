@@ -1,145 +1,354 @@
-# BGA Terraforming Mars Scraper
+# Terraforming Mars BGA Scraper
 
-A comprehensive Python tool for scraping and parsing Terraforming Mars game replays from BoardGameArena with ELO tracking.
+A comprehensive Python tool for scraping and parsing Terraforming Mars game replays from BoardGameArena with ELO tracking and Arena mode detection.
+
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation & Setup](#installation--setup)
+- [Quick Start](#quick-start)
+- [CLI Commands](#cli-commands)
+- [How It Works](#how-it-works)
+- [Configuration](#configuration)
+- [File Organization](#file-organization)
+- [Usage Examples](#usage-examples)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
-- **Enhanced Web scraping**: Automated data collection from both replay and table pages
+- **Modern CLI Interface**: Clean command-based interface for all operations
+- **Enhanced Web Scraping**: Automated data collection from both replay and table pages
 - **Player Game History**: Automatically scrape all table IDs from a player's game history
+- **Arena Mode Detection**: Automatically identifies and filters Arena mode games
 - **ELO Data Extraction**: Arena points, game rank, and rating changes for each player
-- **Comprehensive parsing**: Complete game state reconstruction with move-by-move analysis
-- **Rich data extraction**: Players, corporations, cards, resources, terraforming parameters
-- **Multiple output formats**: JSON export with structured game data including ELO information
-- **Game state tracking**: Full game progression from start to finish
+- **Comprehensive Parsing**: Complete game state reconstruction with move-by-move analysis
+- **Rich Data Extraction**: Players, corporations, cards, resources, terraforming parameters
+- **Multiple Output Formats**: JSON export with structured game data including ELO information
+- **Game State Tracking**: Full game progression from start to finish
+- **Registry Management**: Tracks processed games to avoid duplicates
+- **Smart Filtering**: Skip players with completed discovery automatically
 
-## Quick Start
+## Requirements
 
-### 1. Install Dependencies
+### System Requirements
+- **Python 3.7+**
+- **Google Chrome browser** (latest version recommended)
+- **ChromeDriver** (matching your Chrome version)
+- **Windows/macOS/Linux** (tested on Windows 11)
 
+### Python Dependencies
+- `requests>=2.31.0` - HTTP requests
+- `beautifulsoup4>=4.12.0` - HTML parsing
+- `lxml>=4.9.0` - XML/HTML processing
+- `selenium>=4.15.0` - Browser automation
+- `psutil>=5.9.0` - System process management
+
+## Installation & Setup
+
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd bga-tm-scraper
+```
+
+### 2. Install Python Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Setup ChromeDriver
-
-1. Download ChromeDriver from https://chromedriver.chromium.org/
-2. Make sure the version matches your Chrome browser version
+### 3. Setup ChromeDriver
+1. Check your Chrome version: `chrome://version/`
+2. Download matching ChromeDriver from https://chromedriver.chromium.org/
 3. Extract to a folder (e.g., `C:\Code\chromedriver-win64\`)
+4. Note the path to `chromedriver.exe`
 
-### 3. Configure Settings
-
+### 4. Configure Settings
 ```bash
 cp config.example.py config.py
 ```
 
 Edit `config.py` and update:
 - `CHROMEDRIVER_PATH`: Path to your ChromeDriver executable
-- `TEST_TABLE_IDS`: List of table IDs to scrape (e.g., ["688769496"])
+- `CHROME_PATH`: Path to your Chrome browser (if not default)
+- `BGA_EMAIL` and `BGA_PASSWORD`: Your BoardGameArena credentials
+- Other settings as needed (see [Configuration](#configuration))
 
-The scraper now works with table IDs instead of full replay URLs for enhanced functionality.
-
-### 4. Run the Scraper
-
-For individual games:
+### 5. Verify Setup
 ```bash
-python main.py
+# Check if everything is working
+python main.py status
 ```
 
-For player game history:
+## Quick Start
+
+### 1. Update Player Registry
 ```bash
-python test_player_history.py
+# Get top 100 Arena players
+python main.py update-players --count 100
 ```
 
-### 5. Parse Game Data
-
+### 2. Check Status
 ```bash
-python test_parser.py
+# See what's in the registry
+python main.py status --detailed
 ```
 
-## Project Structure
+### 3. Start Scraping
+```bash
+# Complete workflow for all players (tables + replays + parsing)
+python main.py scrape-complete --all
+
+# Or start with just table scraping to identify Arena games
+python main.py scrape-tables --all
+```
+
+### 4. Parse Games
+```bash
+# Parse games that have been scraped
+python main.py parse
+```
+
+## CLI Commands
+
+The CLI provides six main commands for different operations:
+
+### `scrape-tables` - Scrape table HTMLs only
+Scrapes table pages to identify Arena mode games and extract basic information.
+
+```bash
+# Scrape tables for all players (updates player registry first)
+python main.py scrape-tables --all --update-players
+
+# Scrape tables for specific players
+python main.py scrape-tables 12345678 87654321 11223344
+```
+
+**Options:**
+- `--all, -a`: Process all players from the registry
+- `--update-players`: Update player registry before processing
+- `--retry-failed`: Include previously failed games
+
+### `scrape-complete` - Full workflow (tables + replays + parsing)
+Performs the complete workflow: scrapes tables, scrapes replays for Arena games, and parses them.
+
+```bash
+# Complete workflow for all players
+python main.py scrape-complete --all --update-players
+
+# Complete workflow for specific players
+python main.py scrape-complete 12345678 87654321
+
+# Retry failed games for specific players
+python main.py scrape-complete 12345678 --retry-failed
+```
+
+**Options:**
+- `--all, -a`: Process all players from the registry
+- `--update-players`: Update player registry before processing
+- `--retry-failed`: Include previously failed games
+
+### `scrape-replays` - Scrape replays and parse (requires table HTMLs)
+Scrapes replay pages and parses games that already have table HTML scraped.
+
+```bash
+# Process all games that need replay scraping
+python main.py scrape-replays
+
+# Process specific games (using composite keys)
+python main.py scrape-replays 123456789:12345678 987654321:87654321
+```
+
+**Composite Key Format:** `table_id:player_perspective`
+- Example: `123456789:12345678` means table ID 123456789 from player 12345678's perspective
+
+### `parse` - Parse games only (requires both HTMLs)
+Parses games that have both table and replay HTML files already scraped.
+
+```bash
+# Parse all games ready for parsing
+python main.py parse
+
+# Parse specific games
+python main.py parse 123456789:12345678 987654321:87654321
+
+# Reparse all games (including already parsed ones)
+python main.py parse --reparse
+
+# Reparse specific games
+python main.py parse --reparse 123456789:12345678 987654321:87654321
+```
+
+**Options:**
+- `--reparse`: Reparse already parsed games (overwrite existing JSON files)
+
+### `update-players` - Update player registry
+Updates the player registry with the latest Arena leaderboard data.
+
+```bash
+# Update with default number of players (from config)
+python main.py update-players
+
+# Update with specific number of top players
+python main.py update-players --count 200
+```
+
+### `status` - Show registry status
+Displays statistics about the current state of the games registry.
+
+```bash
+# Basic status
+python main.py status
+
+# Detailed status with breakdowns
+python main.py status --detailed
+```
+
+## How It Works
+
+### 1. Player Registry Management
+- Fetches top Arena players from BoardGameArena leaderboards
+- Maintains a registry of players to track (`data/registry/players.csv`)
+- Updates player information periodically
+
+### 2. Table Scraping
+- Visits each player's game history page
+- Automatically loads all games by clicking "See more"
+- Extracts table IDs and basic game information
+- Identifies Arena mode games using ELO data presence
+- Stores raw HTML in `data/raw/{player_id}/table_{table_id}.html`
+
+### 3. Replay Scraping
+- For Arena mode games, scrapes detailed replay pages
+- Uses browser automation to handle dynamic content
+- Extracts complete game logs and player actions
+- Stores replay HTML in `data/raw/{player_id}/replay_{table_id}.html`
+
+### 4. Game Parsing
+- Processes both table and replay HTML files
+- Reconstructs complete game state move-by-move
+- Extracts player data, cards, resources, terraforming parameters
+- Combines ELO data from table pages with game data
+- Exports structured JSON files to `data/parsed/{player_id}/game_{table_id}.json`
+
+### 5. Registry Tracking
+- Maintains `data/registry/games.csv` to track processing status
+- Prevents duplicate processing
+- Tracks scraping and parsing timestamps
+- Handles version management for replay URLs
+
+### 6. Smart Filtering
+- Automatically skips players with completed discovery
+- Checks for `complete_summary.json` files with `discovery_completed: true`
+- Provides filtering statistics during processing
+
+## Configuration
+
+Key settings in `config.py`:
+
+### Paths and Browser
+```python
+CHROMEDRIVER_PATH = r'C:\path\to\chromedriver.exe'
+CHROME_PATH = r'C:\Program Files\Google\Chrome\Application\chrome.exe'
+```
+
+### BGA Credentials
+```python
+BGA_EMAIL = "your_email@example.com"
+BGA_PASSWORD = "your_password"
+```
+
+### Scraping Settings
+```python
+REQUEST_DELAY = 2  # Seconds between requests
+TOP_N_PLAYERS = 1000  # Number of players to fetch
+SEASON_21_FILTER = True  # Only Season 21 games
+TWO_PLAYER_ONLY = True  # Only 2-player games
+```
+
+### Speed Profiles
+Choose from predefined profiles or customize:
+```python
+SPEED_PROFILE = "NORMAL"  # Options: "FAST", "NORMAL", "SLOW", "CUSTOM"
+```
+
+## File Organization
 
 ```
 bga-tm-scraper/
-├── src/
-│   ├── scraper.py          # Web scraping logic
-│   ├── parser.py           # Comprehensive game parser
-│   └── card_vp_database.py # Card VP calculations
+├── main.py                    # CLI entry point
+├── config.py                  # Configuration settings
+├── requirements.txt           # Python dependencies
+├── bga_tm_scraper/           # Core modules
+│   ├── scraper.py            # Web scraping logic
+│   ├── parser.py             # Game parsing logic
+│   ├── games_registry.py     # Registry management
+│   ├── players_registry.py   # Player management
+│   └── bga_session.py        # BGA session handling
 ├── data/
-│   ├── raw/                # Raw HTML files
-│   └── parsed/             # Processed game data
-├── main.py                 # Scraper entry point
-├── test_player_history.py  # Player game history scraper
-├── test_parser.py          # Parser testing and demo
-├── config.py               # Configuration settings
-└── requirements.txt        # Python dependencies
+│   ├── raw/                  # Raw HTML files
+│   │   └── {player_id}/
+│   │       ├── table_{table_id}.html
+│   │       └── replay_{table_id}.html
+│   ├── parsed/               # Processed JSON files
+│   │   └── {player_id}/
+│   │       ├── game_{table_id}.json
+│   │       └── complete_summary.json
+│   └── registry/             # Registry files
+│       ├── games.csv         # Games tracking
+│       └── players.csv       # Players list
+└── scraper.log              # Application logs
 ```
 
-## Player Game History Scraping
+## Usage Examples
 
-The scraper can now automatically collect all table IDs from a player's game history:
-
-### How It Works
-1. Navigate to a player's game history page
-2. Automatically click "See more" until all games are loaded
-3. Extract table IDs from the complete game list
-4. Optionally scrape detailed data for all found games
-
-### Usage
+### Initial Setup Workflow
 ```bash
-python test_player_history.py
+# 1. Update player registry with top 100 players
+python main.py update-players --count 100
+
+# 2. Check what's in the registry
+python main.py status --detailed
+
+# 3. Start with table scraping to identify Arena games
+python main.py scrape-tables --all
+
+# 4. Check progress
+python main.py status
+
+# 5. Run complete workflow for new data
+python main.py scrape-complete --all
 ```
 
-The script will:
-- Prompt for a player ID
-- Open browser for manual login
-- Automatically load all games by clicking "See more"
-- Extract and save all table IDs
-- Optionally scrape the first 5 games as a sample
+### Daily Maintenance
+```bash
+# Update players and run complete workflow
+python main.py scrape-complete --all --update-players
 
-### Features
-- **Smart Detection**: Stops when "No more results" banner appears
-- **Progress Tracking**: Shows how many games have been loaded
-- **Safety Limits**: Maximum click limit to prevent infinite loops
-- **Error Handling**: Robust error recovery and logging
-- **Data Export**: Saves table IDs and scraping results to JSON files
+# Or just parse games that are ready
+python main.py parse
 
-## ELO Data Extraction
+# Check progress
+python main.py status --detailed
+```
 
-The enhanced scraper now extracts ELO information from game table pages:
+### Targeted Processing
+```bash
+# Process specific players
+python main.py scrape-complete 12345678 87654321
 
-### ELO Data Types
-- **Arena Points**: Current season-specific ranking points
-- **Arena Points Change**: Gain/loss from the specific game
-- **Game Rank**: Overall ELO rating for the game
-- **Game Rank Change**: ELO rating change from the game
+# Process specific games that failed
+python main.py scrape-replays 123456789:12345678 987654321:87654321
 
-### How It Works
-1. Scraper fetches both table page (`/table?table=ID`) and replay page
-2. Parser extracts ELO data from table page HTML structure
-3. ELO information is merged with player data in the final JSON
+# Retry failed games for a player
+python main.py scrape-complete 12345678 --retry-failed
 
-## Parser Features
+# Reparse specific games
+python main.py parse --reparse 123456789:12345678
+```
 
-The new unified parser provides comprehensive game analysis:
-
-### Data Extraction
-- **Complete move log**: Every action with timestamps and details
-- **Game state tracking**: Resources, production, and parameters after each move
-- **Player data**: Corporations, cards played, milestones, awards
-- **Terraforming progression**: Temperature, oxygen, and ocean changes
-- **Victory point tracking**: Detailed VP breakdown and progression
-
-### Action Classification
-- `play_card`: Playing project cards with costs and effects
-- `place_tile`: City, forest, and ocean tile placement
-- `standard_project`: Standard project usage
-- `claim_milestone`: Milestone achievements
-- `fund_award`: Award funding
-- `activate_card`: Card ability activations
-- `convert_heat`: Heat to temperature conversion
-- And more...
-
-### Output Structure
+### Sample Output Structure
 
 The parser generates comprehensive JSON with:
 
@@ -153,7 +362,7 @@ The parser generates comprehensive JSON with:
       "player_name": "StrandedKnight",
       "corporation": "Cheung Shing Mars",
       "final_vp": 104,
-      "cards_played": ["Great Aquifer", "Nuclear Power", ...],
+      "cards_played": ["Great Aquifer", "Nuclear Power"],
       "milestones_claimed": ["Gardener", "Terraformer", "Builder"],
       "awards_funded": ["Landlord"],
       "elo_data": {
@@ -176,9 +385,7 @@ The parser generates comprehensive JSON with:
         "generation": 1,
         "temperature": -30,
         "oxygen": 0,
-        "oceans": 1,
-        "player_resources": {...},
-        "player_production": {...}
+        "oceans": 1
       }
     }
   ],
@@ -191,77 +398,53 @@ The parser generates comprehensive JSON with:
 }
 ```
 
-## Usage Examples
+## Troubleshooting
 
-### Player Game History
-```python
-from src.scraper import TMScraper
+### Common Issues
 
-scraper = TMScraper(chromedriver_path="path/to/chromedriver.exe")
-scraper.start_browser()
-scraper.login_to_bga()
+**ChromeDriver Issues**
+- Ensure ChromeDriver version matches your Chrome browser
+- Update `CHROMEDRIVER_PATH` in config.py
+- Try downloading the latest ChromeDriver
 
-# Get all table IDs for a player
-table_ids = scraper.scrape_player_game_history("86296239")
-print(f"Found {len(table_ids)} games")
+**Login Problems**
+- Verify BGA credentials in config.py
+- Check if BGA requires 2FA (not currently supported)
+- Try manual login in browser first
 
-# Scrape all games
-results = scraper.scrape_multiple_tables_and_replays(table_ids)
-```
+**Scraping Failures**
+- Check internet connection
+- Increase delays in speed profile settings
+- Use `--retry-failed` flag to retry failed games
+- Check `scraper.log` for detailed error messages
 
-### Basic Parsing
-```python
-from src.parser import Parser
+**Memory Issues**
+- Process players in smaller batches
+- Use specific player IDs instead of `--all`
+- Restart the scraper periodically for large datasets
 
-parser = Parser()
-game_data = parser.parse_complete_game(html_content, "game_id")
-parser.export_to_json(game_data, "output.json")
-```
+### Performance Tips
 
-### Analysis
-```bash
-# Run parser test
-python test_parser.py
+1. **Use `scrape-tables` first** to identify Arena games before full processing
+2. **Process in batches** rather than all players at once
+3. **Use `parse` command** to process games that are already scraped
+4. **Check `status`** regularly to monitor progress
+5. **Adjust speed profiles** based on your connection and BGA's response times
 
-# Analyze parsed data
-python test_parser.py analyze
+### Logging
 
-# Scrape player history
-python test_player_history.py
-```
-
-## Sample Output
-
-From the test game (250604-1037):
-- **Players**: 2 (petersenhauke vs StrandedKnight)
-- **Winner**: StrandedKnight (104 VP vs 43 VP)
-- **Duration**: 32 minutes, 11 generations
-- **Total moves**: 288 moves parsed
-- **Cards played**: 54 total
-- **Final terraforming**: -4°C, 14% oxygen, 6 oceans
-
-## Requirements
-
-- Python 3.7+
-- Chrome browser
-- ChromeDriver
-- Required Python packages (see requirements.txt)
-
-## Authentication
-
-The scraper uses manual login:
-1. Browser opens to BoardGameArena
-2. You log in manually in the browser
-3. Press Enter in the terminal to continue
-4. Scraper proceeds with authenticated session
-
-## Notes
-
-- You need to be logged into BoardGameArena for the scraper to access replay data
-- The scraper uses Chrome in debug mode to maintain session state
-- Large games may take several minutes to parse completely
-- The parser achieves 99%+ accuracy in move classification and data extraction
+- All operations are logged to `scraper.log`
+- Use `--detailed` flag with status command for more information
+- Check registry files for processing history
 
 ## License
 
 This project is for educational and research purposes. Please respect BoardGameArena's terms of service and use responsibly.
+
+## Contributing
+
+When contributing:
+1. Test with small datasets first
+2. Respect BGA's servers with appropriate delays
+3. Update documentation for new features
+4. Follow existing code patterns and style
