@@ -282,7 +282,7 @@ def handle_scrape_complete(args) -> None:
     else:
         logger.error("Must specify either --all or provide player IDs")
         return
-
+    
     # Initialize components
     games_registry = GamesRegistry()
     scraper = initialize_scraper()
@@ -547,18 +547,10 @@ def handle_parse(args) -> None:
             table_id = game_data['table_id']
             player_perspective = game_data.get('player_perspective')
             
-            # Determine if we should include this game
-            should_include = False
-            
-            if args.reparse:
-                # With --reparse: include all Arena games that have been scraped (regardless of parsed status)
-                should_include = (game_data.get('scraped_at') and game_data.get('is_arena_mode', False))
-            else:
-                # Without --reparse: only include games that are scraped but not parsed
-                should_include = (game_data.get('scraped_at') and not game_data.get('parsed_at') and 
-                                game_data.get('is_arena_mode', False))
-            
-            if should_include:
+            # Check if game has been scraped but not parsed
+            if (game_data.get('scraped_at') and not game_data.get('parsed_at') and 
+                game_data.get('is_arena_mode', False)):
+                
                 # Verify both HTML files exist
                 if player_perspective:
                     player_raw_dir = os.path.join(config.RAW_DATA_DIR, player_perspective)
@@ -576,10 +568,7 @@ def handle_parse(args) -> None:
                         'replay_html_path': replay_html_path
                     })
         
-        if args.reparse:
-            logger.info(f"Found {len(target_games)} games ready for reparsing (including already parsed)")
-        else:
-            logger.info(f"Found {len(target_games)} games ready for parsing")
+        logger.info(f"Found {len(target_games)} games ready for parsing")
     
     if not target_games:
         logger.info("No games to parse")
@@ -591,15 +580,7 @@ def handle_parse(args) -> None:
         table_id = game['table_id']
         player_perspective = game['player_perspective']
         
-        if args.reparse:
-            # Check if this game was already parsed
-            game_info = games_registry.get_game_info(table_id, player_perspective)
-            if game_info and game_info.get('parsed_at'):
-                logger.info(f"Reparsing game {i}/{len(target_games)}: {table_id} (previously parsed)")
-            else:
-                logger.info(f"Parsing game {i}/{len(target_games)}: {table_id}")
-        else:
-            logger.info(f"Parsing game {i}/{len(target_games)}: {table_id}")
+        logger.info(f"Parsing game {i}/{len(target_games)}: {table_id}")
         
         try:
             # Determine HTML file paths if not provided
@@ -660,7 +641,7 @@ def handle_parse(args) -> None:
 def handle_update_players(args) -> None:
     """Handle update-players command"""
     count = args.count if args.count else getattr(config, 'TOP_N_PLAYERS', 1000)
-
+    
     if update_players_registry(count):
         logger.info("Players registry updated successfully")
     else:
@@ -762,8 +743,6 @@ Examples:
     # parse command
     parse_parser = subparsers.add_parser('parse',
                                         help='Parse games only (requires both HTMLs)')
-    parse_parser.add_argument('--reparse', action='store_true',
-                             help='Reparse already parsed games (overwrite existing JSON files)')
     parse_parser.add_argument('games', nargs='*',
                              help='Space-separated list of composite keys (table_id:player_perspective)')
     
