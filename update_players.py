@@ -34,7 +34,7 @@ def setup_logging(verbose: bool = False):
 
 def main():
     # Get config values with fallbacks
-    default_player_count = getattr(config, 'DEFAULT_PLAYER_COUNT', 100)
+    default_player_count = getattr(config, 'TOP_N_PLAYERS', 100)
     default_game_id = getattr(config, 'TERRAFORMING_MARS_GAME_ID', 1924)
     
     parser = argparse.ArgumentParser(description='Update Arena Leaderboard players registry')

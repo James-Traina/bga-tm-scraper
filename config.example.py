@@ -1,15 +1,8 @@
 # BoardGameArena Configuration Template
 # Copy this file to config.py and update with your values
 
-# Test URLs for initial development
-TEST_URLS = [
-    "https://boardgamearena.com/archive/replay/REPLAY_ID/?table=TABLE_ID&player=PLAYER_ID&comments=PLAYER_ID"
-]
-
 # URL templates for constructing BGA URLs
 TABLE_URL_TEMPLATE = "https://boardgamearena.com/table?table={table_id}"
-# NOTE: REPLAY_URL_TEMPLATE is now used as fallback only. The scraper dynamically extracts 
-# the correct version number from the gamereview page for each game.
 REPLAY_URL_TEMPLATE = "https://boardgamearena.com/archive/replay/250604-1037/?table={table_id}&player={player_id}&comments={player_id}"
 
 
@@ -33,8 +26,7 @@ BGA_PASSWORD = "your_password"
 
 # Leaderboard settings
 TERRAFORMING_MARS_GAME_ID = 1924
-DEFAULT_PLAYER_COUNT = 100
-TOP_N_PLAYERS = 100
+TOP_N_PLAYERS = 100 # Number of players to fetch from leaderboard
 SEASON_21_FILTER = True  # Only get Season 21 games
 TWO_PLAYER_ONLY = True   # Only get 2-player games
 

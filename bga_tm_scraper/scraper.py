@@ -660,23 +660,13 @@ class TMScraper:
         Returns:
             dict: Replay data or None if failed
         """
-        # First, extract the version number from the gamereview page
-        version = self.extract_version_from_gamereview(table_id)
+        version_id = self.extract_version_from_gamereview(table_id)
         
-        if not version:
-            # Fallback to the hardcoded version from config
-            logger.warning(f"Could not extract version for table {table_id}, using fallback from config")
-            print("⚠️  Using fallback version from config")
-            from config import REPLAY_URL_TEMPLATE
-            replay_url = REPLAY_URL_TEMPLATE.format(table_id=table_id, player_id=player_id)
-        else:
-            # Construct replay URL with the extracted version
-            replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={table_id}&player={player_id}&comments={player_id}"
-        
+        from config import REPLAY_URL_TEMPLATE
+        replay_url = REPLAY_URL_TEMPLATE.format(version_id=version_id, table_id=table_id, player_id=player_id)
+
         logger.info(f"Scraping replay page: {replay_url}")
         
-        # Use existing scrape_replay method with constructed URL
-        # The scrape_replay method already has robust error handling for authentication issues
         return self.scrape_replay(replay_url, save_raw, raw_data_dir)
 
     def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
