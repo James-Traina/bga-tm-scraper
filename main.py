@@ -102,6 +102,45 @@ def load_players_by_rank() -> List[Dict[str, Any]]:
         return []
 
 
+def is_player_discovery_completed(player_id: str) -> bool:
+    """
+    Check if a player has completed discovery by looking for complete_summary.json
+    with discovery_completed = true
+    
+    Args:
+        player_id: Player ID to check
+        
+    Returns:
+        bool: True if discovery is completed, False otherwise
+    """
+    try:
+        # Get processed data directory
+        processed_dir = getattr(config, 'PROCESSED_DATA_DIR', 'data/processed')
+        summary_file = os.path.join(processed_dir, player_id, 'complete_summary.json')
+        
+        if not os.path.exists(summary_file):
+            return False
+        
+        # Load and check the summary file
+        import json
+        with open(summary_file, 'r', encoding='utf-8') as f:
+            summary_data = json.load(f)
+        
+        # Check if discovery is completed
+        discovery_completed = summary_data.get('discovery_completed', False)
+        
+        if discovery_completed:
+            logger.debug(f"Player {player_id} has completed discovery")
+            return True
+        else:
+            logger.debug(f"Player {player_id} discovery not completed")
+            return False
+            
+    except Exception as e:
+        logger.debug(f"Error checking discovery status for player {player_id}: {e}")
+        return False
+
+
 def update_players_registry(count: int = 1000) -> bool:
     """Update the players registry"""
     try:
@@ -180,8 +219,32 @@ def handle_scrape_tables(args) -> None:
         if not players:
             logger.error("No players found. Run 'update-players' first.")
             return
-        player_ids = [p['player_id'] for p in players]
-        logger.info(f"Processing all {len(player_ids)} players")
+        
+        # Filter out players with completed discovery
+        total_players = len(players)
+        filtered_players = []
+        completed_players = 0
+        
+        for player in players:
+            player_id = player['player_id']
+            if is_player_discovery_completed(player_id):
+                completed_players += 1
+                logger.debug(f"Skipping player {player_id} - discovery already completed")
+            else:
+                filtered_players.append(player)
+        
+        player_ids = [p['player_id'] for p in filtered_players]
+        
+        logger.info(f"Found {total_players} total players")
+        logger.info(f"Filtered out {completed_players} players with completed discovery")
+        logger.info(f"Processing remaining {len(player_ids)} players")
+        print(f"📊 Player filtering: {len(player_ids)}/{total_players} players to process ({completed_players} already completed)")
+        
+        if not player_ids:
+            logger.info("No players need processing - all have completed discovery")
+            print("✅ All players have completed discovery!")
+            return
+            
     elif args.players:
         player_ids = args.players
         logger.info(f"Processing {len(player_ids)} specified players")
@@ -274,8 +337,32 @@ def handle_scrape_complete(args) -> None:
         if not players:
             logger.error("No players found. Run 'update-players' first.")
             return
-        player_ids = [p['player_id'] for p in players]
-        logger.info(f"Processing all {len(player_ids)} players")
+        
+        # Filter out players with completed discovery
+        total_players = len(players)
+        filtered_players = []
+        completed_players = 0
+        
+        for player in players:
+            player_id = player['player_id']
+            if is_player_discovery_completed(player_id):
+                completed_players += 1
+                logger.debug(f"Skipping player {player_id} - discovery already completed")
+            else:
+                filtered_players.append(player)
+        
+        player_ids = [p['player_id'] for p in filtered_players]
+        
+        logger.info(f"Found {total_players} total players")
+        logger.info(f"Filtered out {completed_players} players with completed discovery")
+        logger.info(f"Processing remaining {len(player_ids)} players")
+        print(f"📊 Player filtering: {len(player_ids)}/{total_players} players to process ({completed_players} already completed)")
+        
+        if not player_ids:
+            logger.info("No players need processing - all have completed discovery")
+            print("✅ All players have completed discovery!")
+            return
+            
     elif args.players:
         player_ids = args.players
         logger.info(f"Processing {len(player_ids)} specified players")
