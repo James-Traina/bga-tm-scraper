@@ -392,12 +392,6 @@ Examples:
         result = reparse_single_game(game_id, games_registry)
         results.append(result)
         
-        # Add delay between games (except for the last one)
-        if i < len(game_ids):
-            print("⏱️  Waiting 1 second before next game...")
-            import time
-            time.sleep(1)
-    
     # Print summary
     print_summary(results)
     
