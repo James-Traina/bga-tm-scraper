@@ -82,6 +82,7 @@ class GameData:
     """Complete game data structure"""
     # Game metadata
     replay_id: str
+    player_perspective: str
     game_date: str
     game_duration: str
     winner: str
@@ -108,7 +109,7 @@ class Parser:
     def __init__(self):
         pass
     
-    def parse_complete_game(self, html_content: str, replay_id: str) -> GameData:
+    def parse_complete_game(self, html_content: str, replay_id: str, player_perspective: str) -> GameData:
         """Parse a complete game and return comprehensive data structure"""
         logger.info(f"Starting parsing for game {replay_id}")
         
@@ -166,6 +167,7 @@ class Parser:
         # Create game data
         game_data = GameData(
             replay_id=replay_id,
+            player_perspective=player_perspective,
             game_date=self._extract_game_date(soup),
             game_duration=self._calculate_game_duration(moves_with_states),
             winner=winner,
@@ -2189,7 +2191,7 @@ class Parser:
         
         logger.info("Completed updating game states with comprehensive tracking data")
 
-    def parse_complete_game_with_elo(self, replay_html: str, table_html: str, table_id: str) -> GameData:
+    def parse_complete_game_with_elo(self, replay_html: str, table_html: str, table_id: str, player_perspective: str) -> GameData:
         """Parse a complete game with ELO data from both replay and table HTML"""
         logger.info(f"Starting parsing with ELO data for game {table_id}")
         
@@ -2198,7 +2200,7 @@ class Parser:
         logger.info(f"Found ELO data for players: {list(elo_data.keys())}")
         
         # Parse the main game data from replay HTML
-        game_data = self.parse_complete_game(replay_html, table_id)
+        game_data = self.parse_complete_game(replay_html, table_id, player_perspective)
         
         # Validate that we have meaningful game data before proceeding
         has_meaningful_data = self._validate_meaningful_game_data(game_data, replay_html)
