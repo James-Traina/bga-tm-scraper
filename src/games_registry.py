@@ -148,8 +148,7 @@ class GamesRegistry:
     def mark_game_parsed(self, table_id: str, parsed_at: Optional[str] = None, 
                         player_perspective: Optional[str] = None) -> None:
         """Mark a game as successfully parsed"""
-        if parsed_at is None:
-            parsed_at = datetime.now().isoformat()
+        parsed_at = datetime.now().isoformat()
         
         # Create composite key
         if player_perspective:
