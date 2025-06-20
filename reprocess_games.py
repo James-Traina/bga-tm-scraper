@@ -59,7 +59,7 @@ def extract_version_from_gamereview_session(table_id: str, session):
     
     Args:
         table_id: BGA table ID
-        session: BGAHybridSession instance
+        session: BGASession instance
         
     Returns:
         str: Version number (e.g., "250505-1448") or None if not found
@@ -72,7 +72,7 @@ def extract_version_from_gamereview_session(table_id: str, session):
     try:
         print(f"🌐 Fetching gamereview page: {gamereview_url}")
         
-        # Get the underlying requests session from BGAHybridSession
+        # Get the underlying requests session from BGASession
         requests_session = session.get_session()
         
         # Fetch the gamereview page
@@ -240,13 +240,13 @@ def get_current_site_version_browser(driver):
 
 def fetch_replay_html(game_id: str, player_perspective: str, version: str, session) -> Optional[str]:
     """
-    Fetch replay HTML using BGAHybridSession
+    Fetch replay HTML using BGASession
     
     Args:
         game_id: BGA table ID
         player_perspective: Player ID for perspective
         version: Site version for replay URL
-        session: BGAHybridSession instance
+        session: BGASession instance
         
     Returns:
         str: Replay HTML content or None if failed
@@ -256,7 +256,7 @@ def fetch_replay_html(game_id: str, player_perspective: str, version: str, sessi
         replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={game_id}&player={player_perspective}&comments={player_perspective}"
         print(f"🌐 Fetching replay via browser: {replay_url}")
         
-        # Get the browser driver from BGAHybridSession
+        # Get the browser driver from BGASession
         driver = session.get_driver()
         
         # Navigate to replay page using browser
@@ -315,7 +315,7 @@ def reprocess_single_game(composite_key: str, games_registry, session) -> dict:
     Args:
         composite_key: Game ID and player perspective (game_id:player_perspective)
         games_registry: Games registry instance
-        session: BGAHybridSession instance
+        session: BGASession instance
         
     Returns:
         dict: Processing result
@@ -696,11 +696,11 @@ Examples:
     print(f"\n🚀 Starting to reprocess {len(unique_game_ids)} games...")
     print("=" * 50)
     
-    # Initialize BGAHybridSession
-    from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
+    # Initialize BGASession
+    from bga_tm_scraper.bga_session import BGASession
     
-    print("🔐 Initializing hybrid session (headless Chrome)...")
-    session = BGAHybridSession(
+    print("🔐 Initializing session (headless Chrome)...")
+    session = BGASession(
         email=BGA_EMAIL,
         password=BGA_PASSWORD,
         chromedriver_path=CHROMEDRIVER_PATH,
@@ -708,10 +708,10 @@ Examples:
     )
     
     if not session.login():
-        print("❌ Hybrid session login failed")
+        print("❌ Session login failed")
         return
     
-    print("✅ Hybrid session login successful!")
+    print("✅ Session login successful!")
     
     # Process each game
     results = []
@@ -735,7 +735,7 @@ Examples:
     try:
         session.close()
     except AttributeError:
-        # BGAHybridSession might not have close method, try cleanup
+        # BGASession might not have close method, try cleanup
         if hasattr(session, 'cleanup'):
             session.cleanup()
         elif hasattr(session, 'driver') and session.driver:

@@ -1,5 +1,5 @@
 """
-BGA Hybrid Session Management
+BGA Session Management
 Combines session-based authentication with Selenium browser automation
 Eliminates the need for manual login by transferring authenticated session cookies
 """
@@ -20,9 +20,9 @@ from selenium.webdriver.support import expected_conditions as EC
 logger = logging.getLogger(__name__)
 
 
-class BGAHybridSession:
+class BGASession:
     """
-    Hybrid BGA session manager that combines requests.Session authentication
+    BGA session manager that combines requests.Session authentication
     with Selenium WebDriver automation, eliminating manual login requirements
     """
     
@@ -31,7 +31,7 @@ class BGAHybridSession:
     
     def __init__(self, email: str, password: str, chromedriver_path: str, headless: bool = False):
         """
-        Initialize hybrid session manager
+        Initialize session manager
         
         Args:
             email: BGA account email
@@ -63,7 +63,7 @@ class BGAHybridSession:
         Returns:
             bool: True if both session and browser authentication successful
         """
-        logger.info("Starting hybrid authentication process...")
+        logger.info("Starting authentication process...")
         
         # Step 1: Authenticate with session-based approach
         if not self._login_session():
@@ -87,7 +87,7 @@ class BGAHybridSession:
             return False
         
         self.is_fully_authenticated = True
-        logger.info("✅ Hybrid authentication completed successfully!")
+        logger.info("✅ Authentication completed successfully!")
         return True
     
     def _login_session(self) -> bool:

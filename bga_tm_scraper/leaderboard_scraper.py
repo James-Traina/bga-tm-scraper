@@ -5,7 +5,7 @@ Fetches Arena Leaderboard data from BoardGameArena
 
 import logging
 from typing import List, Tuple, Optional
-from .bga_hybrid_session import BGAHybridSession
+from .bga_session import BGASession
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +15,10 @@ class LeaderboardScraper:
     
     RANKING_URL = '/gamepanel/gamepanel/getRanking.html'
     
-    def __init__(self, session: BGAHybridSession):
+    def __init__(self, session: BGASession):
         """
-        Initialize LeaderboardScraper with BGAHybridSession
-        
         Args:
-            session: BGAHybridSession instance
+            session: BGASession instance
         """
         self.session = session
     

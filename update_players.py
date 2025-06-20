@@ -10,7 +10,7 @@ import sys
 import os
 from datetime import datetime
 
-from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
+from bga_tm_scraper.bga_session import BGASession
 from bga_tm_scraper.leaderboard_scraper import LeaderboardScraper
 from bga_tm_scraper.players_registry import PlayersRegistry
 
@@ -96,9 +96,9 @@ def main():
     
     session = None
     try:
-        # Initialize BGA hybrid session
-        logger.info("Initializing BGA hybrid session...")
-        session = BGAHybridSession(
+        # Initialize BGA session
+        logger.info("Initializing BGA session...")
+        session = BGASession(
             email=config.BGA_EMAIL,
             password=config.BGA_PASSWORD,
             chromedriver_path=config.CHROMEDRIVER_PATH,
@@ -110,7 +110,6 @@ def main():
             logger.error("Failed to login to BGA")
             sys.exit(1)
         
-        # Initialize scraper with the hybrid session (now has compatibility methods)
         scraper = LeaderboardScraper(session)
         
         # Fetch players data

@@ -10,7 +10,7 @@ import re
 import time
 from datetime import datetime
 
-from bga_tm_scraper.bga_hybrid_session import BGAHybridSession
+from bga_tm_scraper.bgasession import BGASession
 
 # Setup logging with UTF-8 encoding to handle Unicode characters (emojis)
 logging.basicConfig(
@@ -201,7 +201,7 @@ def extract_version_from_gamereview_session(table_id, session):
     
     Args:
         table_id: BGA table ID
-        session: BGAHybridSession instance
+        session: BGASession instance
         
     Returns:
         str: Version number (e.g., "250505-1448") or None if not found
@@ -212,7 +212,7 @@ def extract_version_from_gamereview_session(table_id, session):
     try:
         print(f"🌐 Fetching gamereview page: {gamereview_url}")
         
-        # Get the underlying requests session from BGAHybridSession
+        # Get the underlying requests session from BGASession
         requests_session = session.get_session()
         
         # Fetch the gamereview page
@@ -253,7 +253,7 @@ def get_current_site_version(session):
     Get the current site version from BGA main page
     
     Args:
-        session: BGAHybridSession instance
+        session: BGASession instance
         
     Returns:
         str: Current site version or None if not found
@@ -438,9 +438,9 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
         # Import credentials
         from config import BGA_EMAIL, BGA_PASSWORD, REQUEST_DELAY
         
-        # Initialize hybrid session with headless Chrome
-        print("🔐 Initializing hybrid session (headless Chrome)...")
-        session = BGAHybridSession(
+        # Initialize session with headless Chrome
+        print("🔐 Initializing session (headless Chrome)...")
+        session = BGASession(
             email=BGA_EMAIL,
             password=BGA_PASSWORD,
             chromedriver_path=None,  # Will be set from config
@@ -452,10 +452,10 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
         session.chromedriver_path = CHROMEDRIVER_PATH
         
         if not session.login():
-            print("❌ Hybrid session login failed")
+            print("❌ Session login failed")
             return [], []
         
-        print("✅ Hybrid session login successful!")
+        print("✅ Session login successful!")
         
         # Initialize parser
         from bga_tm_scraper.parser import Parser
@@ -619,7 +619,7 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
                     replay_url = f"https://boardgamearena.com/archive/replay/{version}/?table={table_id}&player={player_id}&comments={player_id}"
                     print(f"🌐 Fetching replay via browser: {replay_url}")
                     
-                    # Get the browser driver from BGAHybridSession
+                    # Get the browser driver from BGASession
                     driver = session.get_driver()
                     
                     # Navigate to replay page using browser
