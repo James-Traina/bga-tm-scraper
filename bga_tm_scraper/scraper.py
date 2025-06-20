@@ -658,22 +658,29 @@ class TMScraper:
         logger.debug(f"No version number found using any pattern for table {table_id}")
         return None
 
-    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
+    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None, version_id: str = None) -> Optional[Dict]:
         """
-        Scrape replay page using table ID and player ID with dynamic version extraction
+        Scrape replay page using table ID and player ID with optional version parameter
         
         Args:
             table_id: BGA table ID
             player_id: Player ID for replay URL construction
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
+            version_id: Optional version ID to use (if not provided, will extract from gamereview)
             
         Returns:
             dict: Replay data or None if failed
         """
         if raw_data_dir is None:
             raw_data_dir = config.RAW_DATA_DIR
-        version_id = self.extract_version_from_gamereview(table_id)
+        
+        # Use provided version or extract from gamereview
+        if version_id:
+            logger.info(f"Using provided version: {version_id}")
+        else:
+            logger.info("No version provided, extracting from gamereview...")
+            version_id = self.extract_version_from_gamereview(table_id)
         
         from config import REPLAY_URL_TEMPLATE
         replay_url = REPLAY_URL_TEMPLATE.format(version_id=version_id, table_id=table_id, player_id=player_id)

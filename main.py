@@ -452,15 +452,20 @@ def handle_scrape_replays(args) -> None:
                     logger.warning(f"No player IDs found for {table_id}")
                     continue
                 
-                # Get version from registry or extract from gamereview
+                # Get version from registry first (optimization)
                 game_info = games_registry.get_game_info(table_id, player_perspective)
                 version = game_info.get('version') if game_info else None
                 
-                if not version:
+                if version:
+                    logger.info(f"Using cached version from registry: {version}")
+                else:
+                    logger.info("Version not in registry, extracting from gamereview...")
                     version = scraper.extract_version_from_gamereview(table_id)
                     if version and game_info:
+                        # Update registry with the newly found version
                         game_info['version'] = version
                         games_registry.save_registry()
+                        logger.info(f"Cached version {version} to registry for future use")
                 
                 if not version:
                     logger.warning(f"No version found for {table_id}")
@@ -471,11 +476,22 @@ def handle_scrape_replays(args) -> None:
                     logger.info(f"Replay HTML already exists for {table_id}")
                     replay_exists = True
                 else:
-                    # Scrape replay using browser mode for complete HTML
-                    result = scraper.scrape_table_and_replay(table_id, player_perspective, save_raw=True,
-                                                            raw_data_dir=config.RAW_DATA_DIR)
+                    # Scrape replay only (table HTML already exists)
+                    replay_result = scraper.scrape_replay_from_table(table_id, player_ids[0], save_raw=True,
+                                                                   raw_data_dir=config.RAW_DATA_DIR, version_id=version)
                     
-                    if result and result.get('success'):
+                    if replay_result:
+                        # Check if replay limit was reached
+                        if replay_result.get('limit_reached'):
+                            logger.warning("🚫 Daily replay limit reached - stopping scraping")
+                            print("\n" + "="*60)
+                            print("🚫 DAILY REPLAY LIMIT REACHED")
+                            print("BGA has daily limits on replay access to prevent server overload.")
+                            print("Please try again tomorrow or wait for the limit to reset.")
+                            print(f"Progress: {successful_scrapes} replays scraped, {successful_parses} games parsed")
+                            print("="*60)
+                            break  # Exit the game processing loop
+                        
                         successful_scrapes += 1
                         replay_exists = True
                         logger.info(f"✅ Successfully scraped replay for {table_id}")
