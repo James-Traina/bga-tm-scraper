@@ -14,7 +14,10 @@ from typing import Dict, List, Optional, Set
 class GamesRegistry:
     """Manages the master games registry CSV file"""
     
-    def __init__(self, registry_path: str = "data/processed/games.csv"):
+    def __init__(self, registry_path: str = None):
+        if registry_path is None:
+            import config
+            registry_path = os.path.join(config.REGISTRY_DATA_DIR, "games.csv")
         self.registry_path = registry_path
         self.fieldnames = [
             'TableId', 'PlayerPerspective', 'RawDatetime', 'ParsedDatetime', 'Players', 

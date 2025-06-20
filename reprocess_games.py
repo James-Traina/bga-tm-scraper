@@ -12,6 +12,8 @@ from typing import List, Optional, Tuple
 from datetime import datetime
 import time
 
+import config
+
 
 # Setup logging
 logging.basicConfig(
@@ -23,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def setup_directories():
     """Ensure required directories exist"""
-    directories = ['data/raw', 'data/parsed']
+    directories = [config.RAW_DATA_DIR, config.PARSED_DATA_DIR]
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
@@ -37,8 +39,8 @@ def parse_composite_key(composite_key: str) -> Tuple[str, str]:
 
 def check_game_status(game_id: str, player_perspective: str) -> dict:
     """Check the current status of a game's files"""
-    table_path = f"data/raw/{player_perspective}/table_{game_id}.html"
-    replay_path = f"data/raw/{player_perspective}/replay_{game_id}.html"
+    table_path = os.path.join(config.RAW_DATA_DIR, player_perspective, f"table_{game_id}.html")
+    replay_path = os.path.join(config.RAW_DATA_DIR, player_perspective, f"replay_{game_id}.html")
     
     status = {
         'table_exists': os.path.exists(table_path),
@@ -426,7 +428,7 @@ def reprocess_single_game(composite_key: str, games_registry, session) -> dict:
         )
         
         # Export to JSON
-        output_path = f"data/parsed/{player_perspective}/game_{game_id}.json"
+        output_path = os.path.join(config.PARSED_DATA_DIR, player_perspective, f"game_{game_id}.json")
         print(f"💾 Saving to {output_path}...")
         parser.export_to_json(game_data, output_path)
         

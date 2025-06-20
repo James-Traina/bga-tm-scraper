@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
 from pathlib import Path
+import config
 
 def analyze_parameter_progression():
     """
@@ -16,7 +17,7 @@ def analyze_parameter_progression():
     generation_progressions = defaultdict(lambda: {'temperature': [], 'oxygen': [], 'oceans': []})
     
     # Path to parsed data directory
-    parsed_data_dir = Path('data/parsed')
+    parsed_data_dir = Path(config.PARSED_DATA_DIR)
     
     if not parsed_data_dir.exists():
         print(f"Error: Directory {parsed_data_dir} does not exist")

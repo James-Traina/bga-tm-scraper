@@ -40,8 +40,8 @@ def main():
     parser = argparse.ArgumentParser(description='Update Arena Leaderboard players registry')
     parser.add_argument('--players', '-n', type=int, default=default_player_count,
                        help=f'Number of top players to fetch (default: {default_player_count})')
-    parser.add_argument('--output', '-o', default='data/processed/players.csv',
-                       help='Output CSV file path (default: data/processed/players.csv)')
+    parser.add_argument('--output', '-o', default=os.path.join(config.REGISTRY_DATA_DIR, 'players.csv'),
+                       help=f'Output CSV file path (default: {os.path.join(config.REGISTRY_DATA_DIR, "players.csv")})')
     parser.add_argument('--game-id', type=int, default=default_game_id,
                        help=f'BGA Game ID (default: {default_game_id} for Terraforming Mars)')
     parser.add_argument('--verbose', '-v', action='store_true',

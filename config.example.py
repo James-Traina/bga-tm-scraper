@@ -14,7 +14,8 @@ MAX_RETRIES = 3  # Maximum retry attempts
 # Data storage paths
 RAW_DATA_DIR = 'data/raw'
 PROCESSED_DATA_DIR = 'data/processed'
-URLS_DIR = 'data/urls'
+PARSED_DATA_DIR = 'data/parsed'
+REGISTRY_DATA_DIR = 'data/registry'
 
 # Chrome settings
 CHROME_PATH = r'C:\Program Files\Google\Chrome\Application\chrome.exe'  # Update this path
@@ -72,9 +73,3 @@ CURRENT_SPEED = SPEED_PROFILES[SPEED_PROFILE]
 # - click_delay: Time to wait between clicks when auto-clicking "See more" (seconds)
 # - gamereview_delay: Time to wait for gamereview page to load (seconds)
 # - element_wait_timeout: Maximum time to wait for elements to appear (seconds)
-#
-# Recommendations:
-# - Use FAST for reliable internet and powerful computers
-# - Use NORMAL for typical setups (recommended for most users)
-# - Use SLOW for slower internet or if you encounter timeout errors
-# - Use CUSTOM and modify the values above if you need fine-tuned control

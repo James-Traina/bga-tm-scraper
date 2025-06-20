@@ -11,6 +11,8 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 
+import config
+
 
 # Setup logging
 logging.basicConfig(
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def setup_directories():
     """Ensure required directories exist"""
-    directories = ['data/raw', 'data/parsed']
+    directories = [config.RAW_DATA_DIR, config.PARSED_DATA_DIR]
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
 
@@ -34,7 +36,7 @@ def get_game_ids_from_args(args) -> List[str]:
     if args.from_csv:
         try:
             import csv
-            with open('data/processed/games.csv', 'r', encoding='utf-8') as f:
+            with open(os.path.join(config.REGISTRY_DATA_DIR, 'games.csv'), 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 parsed_games = []
                 for row in reader:
@@ -52,7 +54,7 @@ def get_game_ids_from_args(args) -> List[str]:
                 return list(parsed_games)
                 
         except FileNotFoundError:
-            print(f"❌ games.csv not found in data/processed/")
+            print(f"❌ games.csv not found in {config.REGISTRY_DATA_DIR}/")
             return []
         except Exception as e:
             print(f"❌ Error reading games.csv: {e}")
@@ -124,8 +126,8 @@ def check_html_files_exist_for_perspective(game_id: str, player_perspective: str
     
     # If player_perspective is specified, look in that specific folder
     if player_perspective:
-        table_path = f"data/raw/{player_perspective}/table_{game_id}.html"
-        replay_path = f"data/raw/{player_perspective}/replay_{game_id}.html"
+        table_path = os.path.join(config.RAW_DATA_DIR, player_perspective, f"table_{game_id}.html")
+        replay_path = os.path.join(config.RAW_DATA_DIR, player_perspective, f"replay_{game_id}.html")
         
         if os.path.exists(table_path) and os.path.exists(replay_path):
             return True, table_path, replay_path, player_perspective
@@ -133,19 +135,19 @@ def check_html_files_exist_for_perspective(game_id: str, player_perspective: str
             return False, table_path, replay_path, player_perspective
     
     # If no player_perspective specified, check root directory first (old format)
-    table_path = f"data/raw/table_{game_id}.html"
-    replay_path = f"data/raw/replay_{game_id}.html"
+    table_path = os.path.join(config.RAW_DATA_DIR, f"table_{game_id}.html")
+    replay_path = os.path.join(config.RAW_DATA_DIR, f"replay_{game_id}.html")
     
     if os.path.exists(table_path) and os.path.exists(replay_path):
         return True, table_path, replay_path, None
     
     # Check in player perspective folders (new format)
     # Look for table file in any player perspective folder
-    table_pattern = f"data/raw/*/table_{game_id}.html"
+    table_pattern = os.path.join(config.RAW_DATA_DIR, "*", f"table_{game_id}.html")
     table_matches = glob.glob(table_pattern)
     
     # Look for replay file in any player perspective folder
-    replay_pattern = f"data/raw/*/replay_{game_id}.html"
+    replay_pattern = os.path.join(config.RAW_DATA_DIR, "*", f"replay_{game_id}.html")
     replay_matches = glob.glob(replay_pattern)
     
     if table_matches and replay_matches:
@@ -238,11 +240,11 @@ def reparse_single_game(composite_key: str, games_registry=None) -> dict:
         
         # Export to JSON with player perspective if available
         if player_perspective:
-            output_path = f"data/parsed/{player_perspective}/game_{game_id}.json"
+            output_path = os.path.join(config.PARSED_DATA_DIR, player_perspective, f"game_{game_id}.json")
             print(f"💾 Saving to {output_path} (player perspective: {player_perspective})...")
             parser.export_to_json(game_data, output_path)
         else:
-            output_path = f"data/parsed/game_{game_id}.json"
+            output_path = os.path.join(config.PARSED_DATA_DIR, f"game_{game_id}.json")
             print(f"💾 Saving to {output_path}...")
             parser.export_to_json(game_data, output_path)
         

@@ -10,7 +10,8 @@ import re
 import time
 from datetime import datetime
 
-from bga_tm_scraper.bgasession import BGASession
+import config
+from bga_tm_scraper.bga_session import BGASession
 
 # Setup logging with UTF-8 encoding to handle Unicode characters (emojis)
 logging.basicConfig(
@@ -28,7 +29,7 @@ def load_players_by_rank():
     """Load players from players.csv ordered by ArenaRank"""
     players = []
     try:
-        with open('data/processed/players.csv', 'r', encoding='utf-8') as f:
+        with open(os.path.join(config.REGISTRY_DATA_DIR, 'players.csv'), 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 players.append({
@@ -42,7 +43,7 @@ def load_players_by_rank():
         players.sort(key=lambda x: x['arena_rank'])
         return players
     except FileNotFoundError:
-        print("❌ players.csv not found in data/processed/")
+        print(f"❌ players.csv not found in {config.REGISTRY_DATA_DIR}/")
         return []
     except Exception as e:
         print(f"❌ Error loading players.csv: {e}")
@@ -50,7 +51,7 @@ def load_players_by_rank():
 
 def get_player_summary_status(player_id):
     """Get player processing status from their summary file"""
-    summary_file = f"data/processed/{player_id}/complete_summary.json"
+    summary_file = os.path.join(config.PROCESSED_DATA_DIR, player_id, "complete_summary.json")
     
     if not os.path.exists(summary_file):
         return None
@@ -109,7 +110,7 @@ def is_player_processed(player_id, mode, games_registry):
 
 def save_player_summary(player_id, summary_data):
     """Save player summary to their folder with discovery status tracking"""
-    player_dir = f"data/processed/{player_id}"
+    player_dir = os.path.join(config.PROCESSED_DATA_DIR, player_id)
     os.makedirs(player_dir, exist_ok=True)
     
     summary_file = os.path.join(player_dir, "complete_summary.json")
@@ -735,7 +736,7 @@ def scrape_with_browser_retry(table_ids_to_scrape, games_registry, raw_data_dir)
                 )
                 
                 # Export to JSON with player perspective
-                output_path = f"data/parsed/game_{table_id}.json"
+                output_path = os.path.join(config.PARSED_DATA_DIR, f"game_{table_id}.json")
                 parser.export_to_json(game_data, output_path, player_perspective=player_id)
                 
                 parsing_results.append({
@@ -831,7 +832,7 @@ def main():
     
     # Create data directories
     os.makedirs(RAW_DATA_DIR, exist_ok=True)
-    os.makedirs('data/processed', exist_ok=True)
+    os.makedirs(config.PROCESSED_DATA_DIR, exist_ok=True)
     
     filter_arena_season_21 = True
     

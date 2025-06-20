@@ -19,6 +19,7 @@ from .bga_session import BGASession
 
 logger = logging.getLogger(__name__)
 
+import config
 from config import TERRAFORMING_MARS_GAME_ID
 
 # Arena Season 21 date range constants
@@ -176,7 +177,7 @@ class TMScraper:
             print("⚠️  Could not verify login, but continuing anyway...")
             return True
     
-    def scrape_table_only(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_only(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Scrape only the table page for a game, extract player info and check Arena mode
         
@@ -189,6 +190,8 @@ class TMScraper:
         Returns:
             dict: Table data with player info and Arena mode status, or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
         
@@ -262,7 +265,7 @@ class TMScraper:
             logger.error(f"Error scraping table only for {table_id}: {e}")
             return None
 
-    def scrape_table_and_replay(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_and_replay(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Scrape both table page and replay page for a game, filtering for Arena mode only
         
@@ -275,6 +278,8 @@ class TMScraper:
         Returns:
             dict: Combined scraped data or None if failed or not Arena mode
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
         
@@ -347,7 +352,7 @@ class TMScraper:
             logger.error(f"Error scraping table and replay for {table_id}: {e}")
             return None
     
-    def scrape_table_page(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_table_page(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Scrape a table page for ELO information
         
@@ -360,6 +365,8 @@ class TMScraper:
         Returns:
             dict: Table page data or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         from config import TABLE_URL_TEMPLATE
         
         table_url = TABLE_URL_TEMPLATE.format(table_id=table_id)
@@ -647,7 +654,7 @@ class TMScraper:
         logger.debug(f"No version number found using any pattern for table {table_id}")
         return None
 
-    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Scrape replay page using table ID and player ID with dynamic version extraction
         
@@ -660,6 +667,8 @@ class TMScraper:
         Returns:
             dict: Replay data or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         version_id = self.extract_version_from_gamereview(table_id)
         
         from config import REPLAY_URL_TEMPLATE
@@ -669,7 +678,7 @@ class TMScraper:
         
         return self.scrape_replay(replay_url, save_raw, raw_data_dir)
 
-    def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Scrape a single replay page
         
@@ -681,6 +690,8 @@ class TMScraper:
         Returns:
             dict: Scraped data or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         if not self.driver:
             raise RuntimeError("Browser not started. Call start_browser() first.")
         
@@ -1320,7 +1331,7 @@ class TMScraper:
             return None
 
     def scrape_multiple_tables_and_replays(self, games_with_perspectives: List[Dict], save_raw: bool = True,
-                                         raw_data_dir: str = 'data/raw') -> List[Dict]:
+                                         raw_data_dir: str = None) -> List[Dict]:
         """
         Scrape multiple table and replay pages with player perspectives
         
@@ -1332,6 +1343,8 @@ class TMScraper:
         Returns:
             list: List of scraped data dictionaries
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         results = []
         
         logger.info(f"Starting batch scraping of {len(games_with_perspectives)} games (table + replay)")
@@ -1355,8 +1368,8 @@ class TMScraper:
         logger.info(f"Batch scraping completed. Successfully scraped {len(results)}/{len(games_with_perspectives)} games")
         return results
 
-    def scrape_multiple_replays(self, urls: List[str], save_raw: bool = True, 
-                              raw_data_dir: str = 'data/raw') -> List[Dict]:
+    def scrape_multiple_replays(self, urls: List[str], save_raw: bool = True,
+                              raw_data_dir: str = None) -> List[Dict]:
         """
         Scrape multiple replay pages (legacy method)
         
@@ -1368,6 +1381,8 @@ class TMScraper:
         Returns:
             list: List of scraped data dictionaries
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         results = []
         
         logger.info(f"Starting batch scraping of {len(urls)} replays")
@@ -1445,8 +1460,8 @@ class TMScraper:
             logger.error(f"Error initializing session: {e}")
             return False
 
-    def fetch_replay_direct(self, table_id: str, version: str, player_id: str, 
-                           save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def fetch_replay_direct(self, table_id: str, version: str, player_id: str,
+                           save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Fetch replay HTML directly using requests session (no browser needed)
         
@@ -1460,6 +1475,8 @@ class TMScraper:
         Returns:
             dict: Replay data or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         if not self.requests_session:
             logger.error("Requests session not initialized. Call initialize_session() first.")
             return None
@@ -1558,7 +1575,7 @@ class TMScraper:
             print(f"❌ Error in direct fetch: {e}")
             return None
 
-    def can_use_direct_fetch(self, table_id: str, raw_data_dir: str = 'data/raw') -> Tuple[bool, Optional[str], Optional[str]]:
+    def can_use_direct_fetch(self, table_id: str, raw_data_dir: str = None) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Check if we can use direct fetching for a game (table HTML exists + version available)
         
@@ -1572,6 +1589,8 @@ class TMScraper:
                 - version: version number if available, None otherwise
                 - player_id: first player ID if available, None otherwise
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         try:
             # Check if table HTML file exists
             table_html_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
@@ -1608,7 +1627,7 @@ class TMScraper:
             logger.error(f"Error checking direct fetch capability for {table_id}: {e}")
             return False, None, None
 
-    def scrape_with_smart_mode(self, table_id: str, save_raw: bool = True, raw_data_dir: str = 'data/raw') -> Optional[Dict]:
+    def scrape_with_smart_mode(self, table_id: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Smart scraping that chooses between direct fetch and browser scraping based on available data
         
@@ -1620,6 +1639,8 @@ class TMScraper:
         Returns:
             dict: Combined scraped data or None if failed
         """
+        if raw_data_dir is None:
+            raw_data_dir = config.RAW_DATA_DIR
         logger.info(f"Smart scraping for game {table_id}")
         
         # Check if we can use direct fetching
