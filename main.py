@@ -125,7 +125,7 @@ def save_player_summary(player_id, summary_data):
         
         summary_data['discovery_completed'] = discovery_completed
         if discovery_completed:
-            summary_data['discovery_completed_at'] = summary_data.get('scraped_at', datetime.now().isoformat())
+            summary_data['discovery_completed_at'] = summary_data.get('scraped_at', datetime.now(datetime.timezone.utc).isoformat())
         summary_data['total_games_discovered'] = len(games_data)
     
     with open(summary_file, 'w', encoding='utf-8') as f:

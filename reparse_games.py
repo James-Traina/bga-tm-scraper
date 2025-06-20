@@ -38,7 +38,7 @@ def get_game_ids_from_args(args) -> List[str]:
             import csv
             with open('data/processed/games.csv', 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                parsed_games = set()
+                parsed_games = []
                 for row in reader:
                     table_id = row['TableId']
                     player_perspective = row['PlayerPerspective']
@@ -48,7 +48,7 @@ def get_game_ids_from_args(args) -> List[str]:
                     if parsed_at and table_id and player_perspective:
                         # Create composite key for tracking
                         composite_key = f"{table_id}:{player_perspective}"
-                        parsed_games.add(composite_key)
+                        parsed_games.append(composite_key)
                 
                 print(f"📊 Found {len(parsed_games)} parsed game-perspective combinations in games.csv")
                 return list(parsed_games)
@@ -380,28 +380,20 @@ Examples:
     if not game_ids:
         print("❌ No game IDs provided")
         return
-    
-    # Remove duplicates while preserving order
-    unique_game_ids = []
-    seen = set()
-    for game_id in game_ids:
-        if game_id not in seen:
-            unique_game_ids.append(game_id)
-            seen.add(game_id)
-    
-    print(f"\n🚀 Starting to reparse {len(unique_game_ids)} games...")
+
+    print(f"\n🚀 Starting to reparse {len(game_ids)} games...")
     print("=" * 50)
     
     # Process each game
     results = []
-    for i, game_id in enumerate(unique_game_ids, 1):
-        print(f"\n--- Processing game {i}/{len(unique_game_ids)} (ID: {game_id}) ---")
+    for i, game_id in enumerate(game_ids, 1):
+        print(f"\n--- Processing game {i}/{len(game_ids)} (ID: {game_id}) ---")
         
         result = reparse_single_game(game_id, games_registry)
         results.append(result)
         
         # Add delay between games (except for the last one)
-        if i < len(unique_game_ids):
+        if i < len(game_ids):
             print("⏱️  Waiting 1 second before next game...")
             import time
             time.sleep(1)
