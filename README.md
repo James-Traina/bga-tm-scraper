@@ -18,14 +18,13 @@ A comprehensive Python tool for scraping and parsing Terraforming Mars game repl
 
 ## Features
 
-- **Modern CLI Interface**: Clean command-based interface for all operations
-- **Enhanced Web Scraping**: Automated data collection from both replay and table pages
+- **CLI Interface**: Clean command-based interface for all operations
+- **Web Scraping**: Automated data collection from both replay and table pages
 - **Player Game History**: Automatically scrape all table IDs from a player's game history
 - **Arena Mode Detection**: Automatically identifies and filters Arena mode games
 - **ELO Data Extraction**: Arena points, game rank, and rating changes for each player
-- **Comprehensive Parsing**: Complete game state reconstruction with move-by-move analysis
+- **Comprehensive Parsing**: Complete game state reconstruction with move-by-move parsing
 - **Rich Data Extraction**: Players, corporations, cards, resources, terraforming parameters
-- **Multiple Output Formats**: JSON export with structured game data including ELO information
 - **Game State Tracking**: Full game progression from start to finish
 - **Registry Management**: Tracks processed games to avoid duplicates
 - **Smart Filtering**: Skip players with completed discovery automatically
@@ -440,11 +439,3 @@ The parser generates comprehensive JSON with:
 ## License
 
 This project is for educational and research purposes. Please respect BoardGameArena's terms of service and use responsibly.
-
-## Contributing
-
-When contributing:
-1. Test with small datasets first
-2. Respect BGA's servers with appropriate delays
-3. Update documentation for new features
-4. Follow existing code patterns and style
