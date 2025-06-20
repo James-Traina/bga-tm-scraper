@@ -2662,61 +2662,6 @@ class Parser:
             else:
                 logger.warning(f"No ELO data found for player {player.player_name}")
 
-    def track_resources_and_production_only(self, html_content: str) -> List[Dict[str, Any]]:
-        """
-        Extract only the resource/production tracking data in the exact format requested.
-        Returns a list of dictionaries with move_index and data for each player.
-        
-        Args:
-            html_content: HTML content of the game replay
-            
-        Returns:
-            List of tracking entries in format:
-            [
-                {
-                    'move_index': 1,
-                    'data': {
-                        86949293: {'MC': 87, 'MC Production': 39, ...},
-                        96014413: {'MC': 112, 'MC Production': 33, ...}
-                    }
-                },
-                ...
-            ]
-        """
-        logger.info("Starting resource/production tracking only")
-        
-        try:
-            # Extract gamelogs
-            gamelogs = self._extract_g_gamelogs(html_content)
-            if not gamelogs:
-                logger.error("No gamelogs found in HTML")
-                return []
-            
-            # Extract tracker dictionary dynamically from HTML
-            tracker_dict = self._extract_tracker_dictionary_from_html(html_content)
-            if not tracker_dict:
-                logger.error("No tracker dictionary extracted from HTML")
-                return []
-            
-            # Extract player IDs from HTML
-            soup = BeautifulSoup(html_content, 'html.parser')
-            players_info = self._extract_players_info(soup, html_content)
-            if not players_info:
-                logger.error("No players found in HTML")
-                return []
-            
-            player_ids = list(players_info.keys())
-            logger.info(f"Found {len(player_ids)} players: {player_ids}")
-            
-            # Track resources and production through all moves
-            tracking_progression = self._track_resources_and_production(gamelogs, player_ids, tracker_dict)
-            
-            logger.info(f"Completed tracking: {len(tracking_progression)} move snapshots")
-            return tracking_progression
-            
-        except Exception as e:
-            logger.error(f"Error in resource/production tracking: {e}")
-            return []
 
     def export_to_json(self, game_data: GameData, output_path: str, player_perspective: str = None):
         """Export game data to JSON with player perspective folder structure"""

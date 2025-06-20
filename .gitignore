@@ -44,7 +44,7 @@ scraper.log
 data/raw/
 data/processed/
 data/parsed/
-data/urls/
+data/registry/
 
 # Chrome debug profile
 chrome-debug-profile/

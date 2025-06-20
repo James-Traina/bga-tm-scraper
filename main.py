@@ -970,13 +970,13 @@ def process_single_player(player_id, retry_checked_games, no_scrape, filter_aren
                 # Extract table IDs for session-only processing
                 table_ids_to_scrape = [game['table_id'] for game in unscraped_games]
                 
-                # Use session-only approach
-                scraping_results, parsing_results = scrape_with_session_only(
+                # Use browser-based retry approach with BGASession
+                scraping_results, parsing_results = scrape_with_browser_retry(
                     table_ids_to_scrape, games_registry, raw_data_dir
                 )
                 
                 use_session_only = True
-                print(f"\n✅ Session-only processing complete!")
+                print(f"\n✅ Browser-based retry processing complete!")
                 
                 # Calculate and display statistics
                 successful_scrapes = len([r for r in scraping_results if r.get('success', False)])
