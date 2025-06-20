@@ -471,9 +471,9 @@ def handle_scrape_replays(args) -> None:
                     logger.info(f"Replay HTML already exists for {table_id}")
                     replay_exists = True
                 else:
-                    # Scrape replay using smart mode or direct fetch
-                    result = scraper.scrape_with_smart_mode(table_id, save_raw=True, 
-                                                          raw_data_dir=config.RAW_DATA_DIR)
+                    # Scrape replay using browser mode for complete HTML
+                    result = scraper.scrape_table_and_replay(table_id, player_perspective, save_raw=True,
+                                                            raw_data_dir=config.RAW_DATA_DIR)
                     
                     if result and result.get('success'):
                         successful_scrapes += 1

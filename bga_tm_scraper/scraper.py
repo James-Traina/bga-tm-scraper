@@ -367,6 +367,10 @@ class TMScraper:
         """
         if raw_data_dir is None:
             raw_data_dir = config.RAW_DATA_DIR
+        
+        # Validate player_perspective parameter to prevent os.path.join errors
+        if not isinstance(player_perspective, str):
+            raise TypeError(f"player_perspective must be a string, got {type(player_perspective).__name__}: {player_perspective}")
         from config import TABLE_URL_TEMPLATE
         
         table_url = TABLE_URL_TEMPLATE.format(table_id=table_id)
@@ -1627,12 +1631,13 @@ class TMScraper:
             logger.error(f"Error checking direct fetch capability for {table_id}: {e}")
             return False, None, None
 
-    def scrape_with_smart_mode(self, table_id: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
+    def scrape_with_smart_mode(self, table_id: str, player_perspective: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
         """
         Smart scraping that chooses between direct fetch and browser scraping based on available data
         
         Args:
             table_id: BGA table ID
+            player_perspective: Player ID whose perspective this game is being scraped from
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             
@@ -1653,7 +1658,7 @@ class TMScraper:
             if not self.requests_session:
                 if not self.initialize_session():
                     print("❌ Failed to initialize session, falling back to browser mode")
-                    return self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+                    return self.scrape_table_and_replay(table_id, player_perspective, save_raw, raw_data_dir)
             
             # Read existing table HTML
             table_html_path = os.path.join(raw_data_dir, f"table_{table_id}.html")
@@ -1676,7 +1681,7 @@ class TMScraper:
             replay_data = self.fetch_replay_direct(table_id, version, player_id, save_raw, raw_data_dir)
             if not replay_data:
                 print("❌ Direct fetch failed, falling back to browser mode")
-                return self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+                return self.scrape_table_and_replay(table_id, player_perspective, save_raw, raw_data_dir)
             
             # Combine results
             combined_data = {
@@ -1697,7 +1702,7 @@ class TMScraper:
         else:
             print(f"🌐 Using browser mode for game {table_id} (missing table HTML or version)")
             # Fall back to normal browser scraping
-            result = self.scrape_table_and_replay(table_id, save_raw, raw_data_dir)
+            result = self.scrape_table_and_replay(table_id, player_perspective, save_raw, raw_data_dir)
             if result:
                 result['smart_mode'] = 'browser_scraping'
             return result
@@ -1961,7 +1966,7 @@ class TMScraper:
         
         try:
             # Scrape the table page to get game mode information
-            table_data = self.scrape_table_page(table_id, save_raw=False)
+            table_data = self.scrape_table_page(table_id, "temp_check", save_raw=False)
             if not table_data:
                 logger.warning(f"Could not scrape table page for {table_id}")
                 return False
