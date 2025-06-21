@@ -565,7 +565,8 @@ def handle_scrape_replays(args) -> None:
                 else:
                     # Scrape replay only (table HTML already exists)
                     replay_result = scraper.scrape_replay_from_table(table_id, player_ids[0], save_raw=True,
-                                                                   raw_data_dir=config.RAW_DATA_DIR, version_id=version)
+                                                                   raw_data_dir=config.RAW_DATA_DIR, version_id=version, 
+                                                                   player_perspective=player_perspective)
                     
                     if replay_result:
                         # Check if replay limit was reached
@@ -606,9 +607,43 @@ def handle_scrape_replays(args) -> None:
                     games_registry.mark_game_scraped(table_id, player_perspective=player_perspective)
                     games_registry.mark_game_parsed(table_id, player_perspective=player_perspective)
                     
+                    # Save registry after each successful parse to prevent data loss
+                    logger.info(f"Attempting to save registry to: {games_registry.registry_path}")
+                    try:
+                        # Check if directory exists and is writable
+                        registry_dir = os.path.dirname(games_registry.registry_path)
+                        if not os.path.exists(registry_dir):
+                            logger.error(f"Registry directory does not exist: {registry_dir}")
+                            os.makedirs(registry_dir, exist_ok=True)
+                            logger.info(f"Created registry directory: {registry_dir}")
+                        
+                        # Check if file is writable
+                        if os.path.exists(games_registry.registry_path):
+                            if not os.access(games_registry.registry_path, os.W_OK):
+                                logger.error(f"Registry file is not writable: {games_registry.registry_path}")
+                            else:
+                                logger.info(f"Registry file is writable: {games_registry.registry_path}")
+                        
+                        # Attempt to save
+                        games_registry.save_registry()
+                        logger.info(f"✅ Registry saved successfully for game {table_id}")
+                        
+                        # Verify the save worked by checking file modification time
+                        if os.path.exists(games_registry.registry_path):
+                            mtime = os.path.getmtime(games_registry.registry_path)
+                            mtime_str = datetime.fromtimestamp(mtime).isoformat()
+                            logger.info(f"Registry file last modified: {mtime_str}")
+                        else:
+                            logger.error(f"❌ Registry file does not exist after save attempt!")
+                            
+                    except Exception as save_error:
+                        logger.error(f"❌ Failed to save registry for game {table_id}: {save_error}")
+                        logger.error(f"Registry path: {games_registry.registry_path}")
+                        logger.error(f"Registry data keys: {list(games_registry.registry_data.keys())}")
+                    
                     successful_parses += 1
                     logger.info(f"✅ Successfully parsed game {table_id}")
-                
+            
             except Exception as e:
                 logger.error(f"Error processing game {table_id}: {e}")
             
@@ -621,9 +656,8 @@ def handle_scrape_replays(args) -> None:
         logger.error(f"Error in replay scraping: {e}")
     finally:
         scraper.close_browser()
-    
-    # Save updated registry
-    games_registry.save_registry()
+        # Ensure registry is saved even if there were errors
+        games_registry.save_registry()
 
 
 def handle_parse(args) -> None:

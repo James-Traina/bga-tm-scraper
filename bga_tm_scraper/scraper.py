@@ -658,7 +658,7 @@ class TMScraper:
         logger.debug(f"No version number found using any pattern for table {table_id}")
         return None
 
-    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None, version_id: str = None) -> Optional[Dict]:
+    def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None, version_id: str = None, player_perspective: str = None) -> Optional[Dict]:
         """
         Scrape replay page using table ID and player ID with optional version parameter
         
@@ -668,6 +668,7 @@ class TMScraper:
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
             version_id: Optional version ID to use (if not provided, will extract from gamereview)
+            player_perspective: Optional player perspective for file organization (if different from player_id)
             
         Returns:
             dict: Replay data or None if failed
@@ -687,9 +688,10 @@ class TMScraper:
 
         logger.info(f"Scraping replay page: {replay_url}")
         
-        return self.scrape_replay(replay_url, save_raw, raw_data_dir)
+        # Pass player_perspective to scrape_replay for proper file organization
+        return self.scrape_replay(replay_url, save_raw, raw_data_dir, player_perspective)
 
-    def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = None) -> Optional[Dict]:
+    def scrape_replay(self, url: str, save_raw: bool = True, raw_data_dir: str = None, player_perspective: str = None) -> Optional[Dict]:
         """
         Scrape a single replay page
         
@@ -697,6 +699,7 @@ class TMScraper:
             url: BGA replay URL
             save_raw: Whether to save raw HTML
             raw_data_dir: Directory to save raw HTML files
+            player_perspective: Optional player perspective for file organization (overrides URL extraction)
             
         Returns:
             dict: Scraped data or None if failed
@@ -769,11 +772,12 @@ class TMScraper:
             
             # Save raw HTML if requested
             if save_raw:
-                # Extract player perspective from URL for proper folder structure
-                from urllib.parse import urlparse, parse_qs
-                parsed_url = urlparse(url)
-                query_params = parse_qs(parsed_url.query)
-                player_perspective = query_params.get('player', [None])[0]
+                # Use provided player_perspective or extract from URL as fallback
+                if not player_perspective:
+                    from urllib.parse import urlparse, parse_qs
+                    parsed_url = urlparse(url)
+                    query_params = parse_qs(parsed_url.query)
+                    player_perspective = query_params.get('player', [None])[0]
                 
                 if player_perspective:
                     # Create player perspective directory
