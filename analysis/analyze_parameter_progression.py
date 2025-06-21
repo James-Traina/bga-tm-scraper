@@ -1,10 +1,24 @@
 import json
 import os
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from collections import defaultdict
 from pathlib import Path
-import config
+
+# Add parent directory to path to import config
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+try:
+    import config
+except ImportError as e:
+    print(f"Error importing config: {e}")
+    print(f"Current directory: {current_dir}")
+    print(f"Parent directory: {parent_dir}")
+    print(f"Python path: {sys.path}")
+    sys.exit(1)
 
 def analyze_parameter_progression():
     """
