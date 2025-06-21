@@ -320,18 +320,6 @@ python main.py status
 python main.py scrape-complete --all
 ```
 
-### Daily Maintenance
-```bash
-# Update players and run complete workflow
-python main.py scrape-complete --all --update-players
-
-# Or just parse games that are ready
-python main.py parse
-
-# Check progress
-python main.py status --detailed
-```
-
 ### Targeted Processing
 ```bash
 # Process specific players
@@ -397,38 +385,10 @@ The parser generates comprehensive JSON with:
 }
 ```
 
-## Troubleshooting
-
-### Common Issues
-
 **ChromeDriver Issues**
 - Ensure ChromeDriver version matches your Chrome browser
 - Update `CHROMEDRIVER_PATH` in config.py
 - Try downloading the latest ChromeDriver
-
-**Login Problems**
-- Verify BGA credentials in config.py
-- Check if BGA requires 2FA (not currently supported)
-- Try manual login in browser first
-
-**Scraping Failures**
-- Check internet connection
-- Increase delays in speed profile settings
-- Use `--retry-failed` flag to retry failed games
-- Check `scraper.log` for detailed error messages
-
-**Memory Issues**
-- Process players in smaller batches
-- Use specific player IDs instead of `--all`
-- Restart the scraper periodically for large datasets
-
-### Performance Tips
-
-1. **Use `scrape-tables` first** to identify Arena games before full processing
-2. **Process in batches** rather than all players at once
-3. **Use `parse` command** to process games that are already scraped
-4. **Check `status`** regularly to monitor progress
-5. **Adjust speed profiles** based on your connection and BGA's response times
 
 ### Logging
 
