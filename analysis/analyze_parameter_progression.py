@@ -71,6 +71,9 @@ def analyze_parameter_progression():
                 for generation, entries in generation_data.items():
                     if len(entries) < 1:
                         continue
+
+                    if generation > 13:
+                        continue
                     
                     # Sort entries by move_number to get first and last
                     entries.sort(key=lambda x: x.get('move_number', 0))
@@ -132,8 +135,8 @@ def analyze_parameter_progression():
     plt.plot(generations, avg_oceans_progression, linewidth=2, marker='^', label='Oceans', color='blue')
     
     plt.xlabel('Generation', fontsize=12)
-    plt.ylabel('Average Progression (Delta per Generation)', fontsize=12)
-    plt.title('Terraforming Mars: Average Parameter Progression by Generation', fontsize=14, fontweight='bold')
+    plt.ylabel('Average progression (delta per generation)', fontsize=12)
+    plt.title(f"Terraforming Mars: Average parameter progression by generation (N={processed_games})", fontsize=14, fontweight='bold')
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
     
