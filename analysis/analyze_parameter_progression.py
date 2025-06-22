@@ -82,7 +82,7 @@ def analyze_parameter_progression():
                     last_entry = entries[-1]
                     
                     # Calculate deltas (progression = final - initial)
-                    temp_delta = last_entry.get('temperature', 0) - first_entry.get('temperature', 0)
+                    temp_delta = (last_entry.get('temperature', 0) - first_entry.get('temperature', 0)) / 2     # Divide by 2 to normalize on number of steps
                     oxygen_delta = last_entry.get('oxygen', 0) - first_entry.get('oxygen', 0)
                     oceans_delta = last_entry.get('oceans', 0) - first_entry.get('oceans', 0)
                     
@@ -135,7 +135,7 @@ def analyze_parameter_progression():
     plt.plot(generations, avg_oceans_progression, linewidth=2, marker='^', label='Oceans', color='blue')
     
     plt.xlabel('Generation', fontsize=12)
-    plt.ylabel('Average progression (delta per generation)', fontsize=12)
+    plt.ylabel('Average progression (steps per generation)', fontsize=12)
     plt.title(f"Terraforming Mars: Average parameter progression by generation (N={processed_games})", fontsize=14, fontweight='bold')
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
