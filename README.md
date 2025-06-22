@@ -13,19 +13,17 @@ A Python CLI tool for scraping and parsing Terraforming Mars game replays from B
 - [Configuration](#configuration)
 - [File Organization](#file-organization)
 - [Usage Examples](#usage-examples)
-- [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 ## Features
 
-- **CLI Interface**: Clean command-based interface for all operations
+- **CLI Interface**: Command-based interface for all operations
 - **Web Scraping**: Automated data collection from both replay and table pages
 - **Player Game History**: Automatically scrape all table IDs from a player's game history
 - **Arena Mode Detection**: Automatically identifies and filters Arena mode games
 - **ELO Data Extraction**: Arena points, game rank, and rating changes for each player
 - **Comprehensive Parsing**: Complete game state reconstruction with move-by-move parsing
-- **Rich Data Extraction**: Players, corporations, cards, resources, terraforming parameters
-- **Game State Tracking**: Full game progression from start to finish
+- **Game State Tracking**: Full game state tracking from start to finish including VP, resources, production and tags
 - **Registry Management**: Tracks processed games to avoid duplicates
 - **Smart Filtering**: Skip players with completed discovery automatically
 
@@ -36,6 +34,9 @@ A Python CLI tool for scraping and parsing Terraforming Mars game replays from B
 - **Google Chrome browser** (latest version recommended)
 - **ChromeDriver** (matching your Chrome version)
 - **Windows/macOS/Linux** (tested on Windows 11)
+
+### Important Limitations
+- **BGA Daily Replay Limit**: BoardGameArena has a daily limit on replay access that resets after 24 hours. This limits how many replays you can scrape per day.
 
 ### Python Dependencies
 - `requests>=2.31.0` - HTTP requests
@@ -209,25 +210,26 @@ python main.py status --detailed
 ### 1. Player Registry Management
 - Fetches top Arena players from BoardGameArena leaderboards
 - Maintains a registry of players to track (`data/registry/players.csv`)
-- Updates player information periodically
 
 ### 2. Table Scraping
 - Visits each player's game history page
-- Automatically loads all games by clicking "See more"
+- Automatically loads all games by clicking "See more" until all games have been loaded
 - Extracts table IDs and basic game information
 - Identifies Arena mode games using ELO data presence
 - Stores raw HTML in `data/raw/{player_id}/table_{table_id}.html`
+- Scrapes game version number used in the game from the game review page
 
 ### 3. Replay Scraping
-- For Arena mode games, scrapes detailed replay pages
+- Scrapes detailed replay pages
 - Uses browser automation to handle dynamic content
 - Extracts complete game logs and player actions
 - Stores replay HTML in `data/raw/{player_id}/replay_{table_id}.html`
+- **Note**: BGA enforces a daily replay limit that resets after 24 hours, which restricts the number of replays that can be scraped per day
 
 ### 4. Game Parsing
 - Processes both table and replay HTML files
 - Reconstructs complete game state move-by-move
-- Extracts player data, cards, resources, terraforming parameters
+- Extracts player data, cards, resources, terraforming parameters etc.
 - Combines ELO data from table pages with game data
 - Exports structured JSON files to `data/parsed/{player_id}/game_{table_id}.json`
 
@@ -337,51 +339,100 @@ python main.py parse --reparse 123456789:12345678
 
 ### Sample Output Structure
 
-The parser generates comprehensive JSON with:
+The parser generates comprehensive JSON (sample excerpt):
 
 ```json
 {
-  "replay_id": "250604-1037",
-  "game_date": "2025-06-16",
+  "replay_id": "689196352",
+  "player_perspective": "86296239",
+  "game_date": "2025-06-20",
+  "game_duration": "00:30",
   "winner": "StrandedKnight",
+  "generations": 10,
   "players": {
     "86296239": {
-      "player_name": "StrandedKnight",
-      "corporation": "Cheung Shing Mars",
-      "final_vp": 104,
-      "cards_played": ["Great Aquifer", "Nuclear Power"],
-      "milestones_claimed": ["Gardener", "Terraformer", "Builder"],
-      "awards_funded": ["Landlord"],
+      "corporation": "Tharsis Republic",
+      "final_vp": 83,
+      "final_tr": 39,
       "elo_data": {
-        "arena_points": 1754,
-        "arena_points_change": 24,
-        "game_rank": 453,
-        "game_rank_change": -5
+        "arena_points": 1788,
+        "arena_points_change": 34,
+        "game_rank": 469,
+        "game_rank_change": 16
       }
     }
   },
   "moves": [
     {
-      "move_number": 4,
+      "move_number": 5,
+      "timestamp": "8:28:15",
+      "player_id": "86296239",
       "player_name": "StrandedKnight",
       "action_type": "play_card",
-      "card_played": "Great Aquifer",
-      "resource_changes": {"TR": 1},
-      "parameter_changes": {"oceans": 1},
+      "description": "StrandedKnight plays card Aquifer Turbines | StrandedKnight increases  by 2 (immediate effect of Aquifer Turbines) | StrandedKnight pays 3",
+      "card_played": "Aquifer Turbines",
       "game_state": {
+        "move_number": 5,
         "generation": 1,
         "temperature": -30,
         "oxygen": 0,
-        "oceans": 1
-      }
+        "oceans": 0,
+        "player_vp": {
+          "86296239": {
+            "total": 20,
+            "total_details": {
+              "tr": 20,
+              "awards": 0,
+              "milestones": 0,
+              "cities": 0,
+              "greeneries": 0,
+              "cards": 0
+            },
+            "details": {}
+          }
+      },
+      "milestones": {},
+        "awards": {},
+        "player_trackers": {
+          "86296239": {
+            "Plant": 0,
+            "Heat Production": 0,
+            "Titanium Production": 0,
+            "Energy Production": 2,
+            "Steel": 0,
+            "Count of City tags": 0,
+            "Count of Space tags": 0,
+            "Count of Building tags": 0,
+            "Count of Power tags": 1,
+            "Count of Microbe tags": 0,
+            "Hand Counter": 8,
+            "Count of Science tags": 0,
+            "Player Area Counter": 3,
+            "Count of Plant tags": 0,
+            "Titanium": 0,
+            "Count of Animal tags": 0,
+            "Count of Earth tags": 0,
+            "M€ Production": 0,
+            "Count of Jovian tags": 0,
+            "Steel Production": 0,
+            "Plant Production": 0,
+            "Count of played Events cards": 0,
+            "Count of Wild tags": 0,
+            "M€": 16,
+            "Heat": 0,
+            "Energy": 0,
+            "Microbe": 0
+          }
     }
-  ],
-  "final_state": {
-    "generation": 11,
-    "temperature": -4,
-    "oxygen": 14,
-    "oceans": 6
-  }
+  "parameter_progression": [
+    {
+      "move_number": 5,
+      "generation": 1,
+      "temperature": -30,
+      "oxygen": 0,
+      "oceans": 0
+    }
+  ]
 }
 ```
 
