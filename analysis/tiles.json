@@ -1,0 +1,896 @@
+{
+    "tiles": [
+        {
+            "name": "Tharsis Hex 3,1",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,1",
+                "Tharsis Hex 3,2",
+                "Tharsis Tholus"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,1",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,1",
+                "Tharsis Hex 5,1",
+                "Tharsis Tholus",
+                "Tharsis Hex 5,2"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,1",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 4,1",
+                "Tharsis Hex 6,1",
+                "Tharsis Hex 5,2",
+                "Tharsis Hex 6,2"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,1",
+            "resources": [
+                {
+                    "type": "Card",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,1",
+                "Tharsis Hex 7,1",
+                "Tharsis Hex 6,2",
+                "Tharsis Hex 7,2"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,1",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 6,1",
+                "Tharsis Hex 7,2",
+                "Tharsis Hex 8,2"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,2",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,1",
+                "Tharsis Hex 4,1",
+                "Tharsis Tholus",
+                "Tharsis Hex 2,3",
+                "Tharsis Hex 3,3"
+            ]
+        },
+        {
+            "name": "Tharsis Tholus",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,1",
+                "Tharsis Hex 4,1",
+                "Tharsis Hex 3,2",
+                "Tharsis Hex 5,2",
+                "Tharsis Hex 3,3",
+                "Tharsis Hex 4,3"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,2",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 4,1",
+                "Tharsis Hex 5,1",
+                "Tharsis Tholus",
+                "Tharsis Hex 6,2",
+                "Tharsis Hex 4,3",
+                "Tharsis Hex 5,3"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,2",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 5,1",
+                "Tharsis Hex 6,1",
+                "Tharsis Hex 5,2",
+                "Tharsis Hex 7,2",
+                "Tharsis Hex 5,3",
+                "Tharsis Hex 6,3"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,2",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,1",
+                "Tharsis Hex 7,1",
+                "Tharsis Hex 6,2",
+                "Tharsis Hex 8,2",
+                "Tharsis Hex 6,3",
+                "Tharsis Hex 7,3"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,2",
+            "resources": [
+                {
+                    "type": "Card",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,1",
+                "Tharsis Hex 7,2",
+                "Tharsis Hex 7,3",
+                "Tharsis Hex 8,3"
+            ]
+        },
+        {
+            "name": "Ascraeus Mons",
+            "resources": [
+                {
+                    "type": "Card",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,2",
+                "Tharsis Hex 3,3",
+                "Pavonis Mons",
+                "Tharsis Hex 3,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,3",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 3,2",
+                "Tharsis Tholus",
+                "Ascraeus Mons",
+                "Tharsis Hex 4,3",
+                "Tharsis Hex 3,4",
+                "Tharsis Hex 4,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,3",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Tholus",
+                "Tharsis Hex 5,2",
+                "Tharsis Hex 3,3",
+                "Tharsis Hex 5,3",
+                "Tharsis Hex 4,4",
+                "Tharsis Hex 5,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,3",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,2",
+                "Tharsis Hex 6,2",
+                "Tharsis Hex 4,3",
+                "Tharsis Hex 6,3",
+                "Tharsis Hex 5,4",
+                "Tharsis Hex 6,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,3",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,2",
+                "Tharsis Hex 7,2",
+                "Tharsis Hex 5,3",
+                "Tharsis Hex 7,3",
+                "Tharsis Hex 6,4",
+                "Tharsis Hex 7,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,3",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,2",
+                "Tharsis Hex 8,2",
+                "Tharsis Hex 6,3",
+                "Tharsis Hex 8,3",
+                "Tharsis Hex 7,4",
+                "Tharsis Hex 8,4"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,3",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 8,2",
+                "Tharsis Hex 7,3",
+                "Tharsis Hex 8,4",
+                "Tharsis Hex 9,4"
+            ]
+        },
+        {
+            "name": "Pavonis Mons",
+            "resources": [
+                {
+                    "type": "Titanium",
+                    "count": 1
+                },
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Ascraeus Mons",
+                "Tharsis Hex 3,4",
+                "Arsia Mons",
+                "Tharsis Hex 2,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Ascraeus Mons",
+                "Tharsis Hex 3,3",
+                "Pavonis Mons",
+                "Tharsis Hex 2,5",
+                "Noctis City"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,3",
+                "Tharsis Hex 4,3",
+                "Tharsis Hex 3,4",
+                "Tharsis Hex 5,4",
+                "Noctis City",
+                "Tharsis Hex 4,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,3",
+                "Tharsis Hex 5,3",
+                "Tharsis Hex 4,4",
+                "Tharsis Hex 6,4",
+                "Tharsis Hex 4,5",
+                "Tharsis Hex 5,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,3",
+                "Tharsis Hex 6,3",
+                "Tharsis Hex 5,4",
+                "Tharsis Hex 7,4",
+                "Tharsis Hex 5,5",
+                "Tharsis Hex 6,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,3",
+                "Tharsis Hex 7,3",
+                "Tharsis Hex 6,4",
+                "Tharsis Hex 8,4",
+                "Tharsis Hex 6,5",
+                "Tharsis Hex 7,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,3",
+                "Tharsis Hex 8,3",
+                "Tharsis Hex 7,4",
+                "Tharsis Hex 9,4",
+                "Tharsis Hex 7,5",
+                "Tharsis Hex 8,5"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 9,4",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 8,3",
+                "Tharsis Hex 8,4",
+                "Tharsis Hex 8,5",
+                "Tharsis Hex 9,5"
+            ]
+        },
+        {
+            "name": "Arsia Mons",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Pavonis Mons",
+                "Tharsis Hex 2,5",
+                "Tharsis Hex 2,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 2,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Pavonis Mons",
+                "Tharsis Hex 3,4",
+                "Arsia Mons",
+                "Noctis City",
+                "Tharsis Hex 2,6",
+                "Tharsis Hex 3,6"
+            ]
+        },
+        {
+            "name": "Noctis City",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,4",
+                "Tharsis Hex 4,4",
+                "Tharsis Hex 2,5",
+                "Tharsis Hex 4,5",
+                "Tharsis Hex 3,6",
+                "Tharsis Hex 4,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,4",
+                "Tharsis Hex 5,4",
+                "Noctis City",
+                "Tharsis Hex 5,5",
+                "Tharsis Hex 4,6",
+                "Tharsis Hex 5,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,4",
+                "Tharsis Hex 6,4",
+                "Tharsis Hex 4,5",
+                "Tharsis Hex 6,5",
+                "Tharsis Hex 5,6",
+                "Tharsis Hex 6,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,4",
+                "Tharsis Hex 7,4",
+                "Tharsis Hex 5,5",
+                "Tharsis Hex 7,5",
+                "Tharsis Hex 6,6",
+                "Tharsis Hex 7,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,4",
+                "Tharsis Hex 8,4",
+                "Tharsis Hex 6,5",
+                "Tharsis Hex 8,5",
+                "Tharsis Hex 7,6",
+                "Tharsis Hex 8,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 8,4",
+                "Tharsis Hex 9,4",
+                "Tharsis Hex 7,5",
+                "Tharsis Hex 9,5",
+                "Tharsis Hex 8,6",
+                "Tharsis Hex 9,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 9,5",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 9,4",
+                "Tharsis Hex 8,5",
+                "Tharsis Hex 9,6"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 2,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Arsia Mons",
+                "Tharsis Hex 2,5",
+                "Tharsis Hex 3,6",
+                "Tharsis Hex 2,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 2,5",
+                "Noctis City",
+                "Tharsis Hex 2,6",
+                "Tharsis Hex 4,6",
+                "Tharsis Hex 2,7",
+                "Tharsis Hex 3,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Noctis City",
+                "Tharsis Hex 4,5",
+                "Tharsis Hex 3,6",
+                "Tharsis Hex 5,6",
+                "Tharsis Hex 3,7",
+                "Tharsis Hex 4,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,5",
+                "Tharsis Hex 5,5",
+                "Tharsis Hex 4,6",
+                "Tharsis Hex 6,6",
+                "Tharsis Hex 4,7",
+                "Tharsis Hex 5,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,5",
+                "Tharsis Hex 6,5",
+                "Tharsis Hex 5,6",
+                "Tharsis Hex 7,6",
+                "Tharsis Hex 5,7",
+                "Tharsis Hex 6,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,5",
+                "Tharsis Hex 7,5",
+                "Tharsis Hex 6,6",
+                "Tharsis Hex 8,6",
+                "Tharsis Hex 6,7",
+                "Tharsis Hex 7,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,5",
+                "Tharsis Hex 8,5",
+                "Tharsis Hex 7,6",
+                "Tharsis Hex 9,6",
+                "Tharsis Hex 7,7",
+                "Tharsis Hex 8,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 9,6",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 8,5",
+                "Tharsis Hex 9,5",
+                "Tharsis Hex 8,6",
+                "Tharsis Hex 8,7"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 2,7",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 2,6",
+                "Tharsis Hex 3,6",
+                "Tharsis Hex 3,7",
+                "Tharsis Hex 3,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,7",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,6",
+                "Tharsis Hex 4,6",
+                "Tharsis Hex 2,7",
+                "Tharsis Hex 4,7",
+                "Tharsis Hex 3,8",
+                "Tharsis Hex 4,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,7",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 4,6",
+                "Tharsis Hex 5,6",
+                "Tharsis Hex 3,7",
+                "Tharsis Hex 5,7",
+                "Tharsis Hex 4,8",
+                "Tharsis Hex 5,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,7",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 5,6",
+                "Tharsis Hex 6,6",
+                "Tharsis Hex 4,7",
+                "Tharsis Hex 6,7",
+                "Tharsis Hex 5,8",
+                "Tharsis Hex 6,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,7",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 6,6",
+                "Tharsis Hex 7,6",
+                "Tharsis Hex 5,7",
+                "Tharsis Hex 7,7",
+                "Tharsis Hex 6,8",
+                "Tharsis Hex 7,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,7",
+            "resources": [
+                {
+                    "type": "Plant",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,6",
+                "Tharsis Hex 8,6",
+                "Tharsis Hex 6,7",
+                "Tharsis Hex 8,7",
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 8,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,7",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 8,6",
+                "Tharsis Hex 9,6",
+                "Tharsis Hex 7,7",
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 8,8"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,8",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 2,7",
+                "Tharsis Hex 3,7",
+                "Tharsis Hex 4,8",
+                "Tharsis Hex 3,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,8",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,7",
+                "Tharsis Hex 4,7",
+                "Tharsis Hex 3,8",
+                "Tharsis Hex 5,8",
+                "Tharsis Hex 3,9",
+                "Tharsis Hex 4,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,8",
+            "resources": [
+                {
+                    "type": "Card",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,7",
+                "Tharsis Hex 5,7",
+                "Tharsis Hex 4,8",
+                "Tharsis Hex 6,8",
+                "Tharsis Hex 4,9",
+                "Tharsis Hex 5,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,8",
+            "resources": [
+                {
+                    "type": "Card",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 5,7",
+                "Tharsis Hex 6,7",
+                "Tharsis Hex 5,8",
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 5,9",
+                "Tharsis Hex 6,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,8",
+            "resources": [
+            ],
+            "adjacencies": [
+                "Tharsis Hex 6,7",
+                "Tharsis Hex 7,7",
+                "Tharsis Hex 6,8",
+                "Tharsis Hex 8,8",
+                "Tharsis Hex 6,9",
+                "Tharsis Hex 7,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 8,8",
+            "resources": [
+                {
+                    "type": "Titanium",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,7",
+                "Tharsis Hex 8,7",
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 7,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 3,9",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 1
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 3,8",
+                "Tharsis Hex 4,8",
+                "Tharsis Hex 4,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 4,9",
+            "resources": [
+                {
+                    "type": "Steel",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 4,8",
+                "Tharsis Hex 5,8",
+                "Tharsis Hex 3,9",
+                "Tharsis Hex 5,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 5,9",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 5,8",
+                "Tharsis Hex 6,8",
+                "Tharsis Hex 4,9",
+                "Tharsis Hex 6,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 6,9",
+            "resources": [],
+            "adjacencies": [
+                "Tharsis Hex 6,8",
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 5,9",
+                "Tharsis Hex 7,9"
+            ]
+        },
+        {
+            "name": "Tharsis Hex 7,9",
+            "resources": [
+                {
+                    "type": "Titanium",
+                    "count": 2
+                }
+            ],
+            "adjacencies": [
+                "Tharsis Hex 7,8",
+                "Tharsis Hex 8,8",
+                "Tharsis Hex 6,9"
+            ]
+        }
+    ]
+}
