@@ -577,7 +577,7 @@ class TMScraper:
 
     def _extract_version_with_multiple_patterns(self, html_content: str, table_id: str) -> Optional[str]:
         """
-        Extract version number using multiple patterns in order of reliability
+        Extract version number using only the most reliable pattern (replay URLs)
         
         Args:
             html_content: HTML content of the gamereview page
@@ -586,76 +586,33 @@ class TMScraper:
         Returns:
             str: Version number if found, None otherwise
         """
-        logger.debug(f"Trying multiple version extraction patterns for table {table_id}")
+        logger.debug(f"Extracting version from replay URLs for table {table_id}")
         
-        # Pattern definitions in order of reliability (most reliable first)
-        patterns = [
-            # Pattern 1: Direct replay links (most reliable)
-            (r'/archive/replay/(\d{6}-\d{4})/', "Direct replay links"),
-            
-            # Pattern 2: JavaScript variables
-            (r'version["\']?\s*:\s*["\'](\d{6}-\d{4})["\']', "JavaScript variables"),
-            
-            # Pattern 3: JSON data
-            (r'"version"\s*:\s*"(\d{6}-\d{4})"', "JSON data"),
-            
-            # Pattern 4: URL parameters
-            (r'[?&]version=(\d{6}-\d{4})', "URL parameters"),
-            
-            # Pattern 5: Data attributes
-            (r'data-version=["\'](\d{6}-\d{4})["\']', "Data attributes"),
-            
-            # Pattern 6: Hidden form fields
-            (r'<input[^>]*name=["\']version["\'][^>]*value=["\'](\d{6}-\d{4})["\']', "Hidden form fields"),
-            
-            # Pattern 7: Meta tags
-            (r'<meta[^>]*content=["\'](\d{6}-\d{4})["\']', "Meta tags"),
-            
-            # Pattern 8: Game data objects
-            (r'gamedata[^}]*version["\']?\s*:\s*["\'](\d{6}-\d{4})["\']', "Game data objects"),
-        ]
+        # Use only the most reliable pattern: Direct replay links
+        # This pattern has proven to be the most accurate in testing
+        replay_pattern = r'/archive/replay/(\d{6}-\d{4})/'
         
-        # Try each pattern
-        for pattern, description in patterns:
-            try:
-                matches = re.findall(pattern, html_content, re.IGNORECASE)
-                if matches:
-                    # Remove duplicates and get the first unique match
-                    unique_matches = list(dict.fromkeys(matches))  # Preserves order
-                    version = unique_matches[0]
-                    
-                    logger.info(f"Version found using {description}: {version}")
-                    logger.debug(f"Pattern '{description}' found {len(matches)} total matches, using first unique: {version}")
-                    
-                    # Validate the version format (6 digits, dash, 4 digits)
-                    if re.match(r'^\d{6}-\d{4}$', version):
-                        return version
-                    else:
-                        logger.warning(f"Invalid version format from {description}: {version}")
-                        continue
-                        
-            except Exception as e:
-                logger.debug(f"Error with pattern '{description}': {e}")
-                continue
-        
-        # If no specific patterns worked, try a broader search as last resort
-        logger.debug("Trying broader version pattern search as fallback")
         try:
-            # Look for any 6-digit-4-digit pattern
-            broad_matches = re.findall(r'(\d{6}-\d{4})', html_content)
-            if broad_matches:
-                # Remove duplicates and get the first one
-                unique_broad_matches = list(dict.fromkeys(broad_matches))
-                version = unique_broad_matches[0]
+            matches = re.findall(replay_pattern, html_content, re.IGNORECASE)
+            if matches:
+                # Remove duplicates and get the first unique match
+                unique_matches = list(dict.fromkeys(matches))  # Preserves order
+                version = unique_matches[0]
                 
-                logger.info(f"Version found using broad pattern search: {version}")
-                logger.debug(f"Broad search found {len(broad_matches)} total matches, using first unique: {version}")
-                return version
+                logger.info(f"Version found using replay URL pattern: {version}")
+                logger.debug(f"Replay URL pattern found {len(matches)} total matches, using first unique: {version}")
                 
+                # Validate the version format (6 digits, dash, 4 digits)
+                if re.match(r'^\d{6}-\d{4}$', version):
+                    return version
+                else:
+                    logger.warning(f"Invalid version format from replay URL: {version}")
+                    return None
+                    
         except Exception as e:
-            logger.debug(f"Error with broad pattern search: {e}")
+            logger.debug(f"Error with replay URL pattern: {e}")
         
-        logger.debug(f"No version number found using any pattern for table {table_id}")
+        logger.debug(f"No version number found in replay URLs for table {table_id}")
         return None
 
     def scrape_replay_from_table(self, table_id: str, player_id: str, save_raw: bool = True, raw_data_dir: str = None, version_id: str = None, player_perspective: str = None) -> Optional[Dict]:
@@ -743,8 +700,24 @@ class TMScraper:
                     'html_length': len(page_source)
                 }
             
-            # Check for authentication errors and retry once
+            # Check for authentication errors - but first check if it's actually a daily limit issue
             if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
+                # Before trying to re-authenticate, check if this is actually a daily limit issue
+                # Sometimes BGA shows auth errors when the daily limit is reached
+                if self._check_replay_limit_reached(page_source):
+                    logger.warning(f"Daily replay limit reached (detected via auth error page) when accessing {url}")
+                    print("🚫 Daily replay limit reached!")
+                    print("   BGA sometimes shows authentication errors when the daily limit is reached.")
+                    print("   Please try again tomorrow or wait for the limit to reset.")
+                    return {
+                        'replay_id': replay_id,
+                        'url': url,
+                        'scraped_at': datetime.now().isoformat(),
+                        'error': 'replay_limit_reached',
+                        'limit_reached': True,
+                        'html_length': len(page_source)
+                    }
+                
                 logger.warning("Authentication error detected, attempting re-authentication...")
                 print("⚠️  Session expired! Attempting to re-authenticate...")
                 
@@ -761,6 +734,18 @@ class TMScraper:
                 # Check again
                 page_source = self.driver.page_source
                 if 'must be logged' in page_source.lower() or 'fatalerror' in page_source.lower():
+                    # Check one more time if this is a daily limit issue after retry
+                    if self._check_replay_limit_reached(page_source):
+                        logger.warning(f"Daily replay limit reached (detected after retry) when accessing {url}")
+                        print("🚫 Daily replay limit reached after retry!")
+                        return {
+                            'replay_id': replay_id,
+                            'url': url,
+                            'scraped_at': datetime.now().isoformat(),
+                            'error': 'replay_limit_reached',
+                            'limit_reached': True,
+                            'html_length': len(page_source)
+                        }
                     print("❌ Authentication failed even after re-authentication")
                     return None
                 else:
