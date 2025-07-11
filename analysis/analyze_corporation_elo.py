@@ -16,6 +16,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 import csv
+import matplotlib.pyplot as plt
+import numpy as np
 
 def normalize_corporation_name(raw_name):
     """
@@ -320,6 +322,131 @@ def save_corporation_summary_to_csv(corporation_results, output_file):
     except Exception as e:
         print(f"Error saving corporation summary CSV file: {e}")
 
+def plot_corporation_elo_histograms(corporation_results, output_dir, min_games=10):
+    """
+    Plot histograms showing ELO gain distribution for each corporation.
+    
+    Args:
+        corporation_results: Dictionary containing corporation statistics
+        output_dir: Directory to save histogram plots
+        min_games: Minimum number of games required to generate a histogram
+    """
+    if not corporation_results:
+        print("No corporation results to plot.")
+        return
+    
+    # Filter corporations with sufficient data
+    corporations_to_plot = {
+        corp: stats for corp, stats in corporation_results.items() 
+        if stats['game_count'] >= min_games
+    }
+    
+    if not corporations_to_plot:
+        print(f"No corporations have at least {min_games} games. Skipping histogram generation.")
+        return
+    
+    print(f"\nGenerating ELO distribution histograms for {len(corporations_to_plot)} corporations...")
+    
+    # Create output directory if it doesn't exist
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Determine overall ELO range for consistent binning
+    all_elo_changes = []
+    for stats in corporations_to_plot.values():
+        all_elo_changes.extend(stats['player_instances'])
+    
+    if not all_elo_changes:
+        print("No ELO change data found.")
+        return
+    
+    # Extract just the ELO change values
+    elo_values = [data['elo_change'] for data in all_elo_changes]
+    min_elo = min(elo_values)
+    max_elo = max(elo_values)
+    
+    # Create bins with 2 ELO point intervals
+    bin_width = 2
+    bin_start = int(min_elo // bin_width) * bin_width - bin_width
+    bin_end = int(max_elo // bin_width) * bin_width + bin_width * 2
+    bins = np.arange(bin_start, bin_end + bin_width, bin_width)
+    
+    print(f"Using ELO range: {bin_start} to {bin_end} with {bin_width}-point bins")
+    
+    # Sort corporations by average ELO change for consistent ordering
+    sorted_corporations = sorted(corporations_to_plot.items(), 
+                               key=lambda x: x[1]['avg_elo_change'], 
+                               reverse=True)
+    
+    # Generate histogram for each corporation
+    for corporation, stats in sorted_corporations:
+        elo_changes = [data['elo_change'] for data in stats['player_instances']]
+        
+        # Create the plot
+        plt.figure(figsize=(12, 8))
+        
+        # Create histogram
+        n, bins_used, patches = plt.hist(elo_changes, bins=bins, alpha=0.7, 
+                                       color='steelblue', edgecolor='black', linewidth=0.5)
+        
+        # Color bars based on positive/negative ELO changes
+        for i, (patch, bin_left) in enumerate(zip(patches, bins_used[:-1])):
+            bin_center = bin_left + bin_width / 2
+            if bin_center > 0:
+                patch.set_facecolor('green')
+                patch.set_alpha(0.6)
+            elif bin_center < 0:
+                patch.set_facecolor('red')
+                patch.set_alpha(0.6)
+            else:
+                patch.set_facecolor('gray')
+                patch.set_alpha(0.6)
+        
+        # Add vertical line at zero
+        plt.axvline(x=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+        
+        # Add vertical line for average ELO change
+        avg_elo = stats['avg_elo_change']
+        plt.axvline(x=avg_elo, color='orange', linestyle='-', linewidth=3, 
+                   label=f'Average: {avg_elo:.2f}')
+        
+        # Formatting
+        plt.title(f'ELO Gain Distribution - {corporation}\n'
+                 f'({stats["game_count"]} games, Win Rate: {stats["win_rate"]*100:.1f}%)', 
+                 fontsize=16, fontweight='bold')
+        plt.xlabel('ELO Change', fontsize=14)
+        plt.ylabel('Frequency', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=12)
+        
+        # Add statistics text box
+        stats_text = f'Min: {stats["min_elo_change"]}\n' \
+                    f'Max: {stats["max_elo_change"]}\n' \
+                    f'Avg: {avg_elo:.2f}\n' \
+                    f'Games: {stats["game_count"]}'
+        
+        plt.text(0.02, 0.98, stats_text, transform=plt.gca().transAxes, 
+                fontsize=11, verticalalignment='top', 
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        # Set x-axis limits with some padding
+        plt.xlim(bin_start, bin_end)
+        
+        # Improve layout
+        plt.tight_layout()
+        
+        # Save the plot
+        safe_corp_name = corporation.replace(' ', '_').replace('/', '_')
+        filename = f'corporation_elo_histogram_{safe_corp_name}.png'
+        filepath = output_path / filename
+        
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Saved histogram for {corporation}: {filename}")
+    
+    print(f"\nHistogram generation complete! {len(sorted_corporations)} plots saved to {output_path}")
+
 def main():
     """Main function to run the Corporation ELO analysis."""
     # Set up paths
@@ -343,7 +470,10 @@ def main():
         save_detailed_results_to_csv(all_elo_data, detailed_output_file)
         save_corporation_summary_to_csv(corporation_results, summary_output_file)
         
-        print(f"\nAnalysis complete! Check the CSV files for detailed data.")
+        # Generate ELO distribution histograms
+        plot_corporation_elo_histograms(corporation_results, script_dir, min_games=10)
+        
+        print(f"\nAnalysis complete! Check the CSV files and histogram plots for detailed data.")
     else:
         print("No data found to analyze.")
 

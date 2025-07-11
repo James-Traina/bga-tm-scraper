@@ -30,6 +30,10 @@ def analyze_parameter_progression():
     # Structure: {generation: {'temperature': [deltas], 'oxygen': [deltas], 'oceans': [deltas]}}
     generation_progressions = defaultdict(lambda: {'temperature': [], 'oxygen': [], 'oceans': []})
     
+    # Dictionary to store total parameter values by generation for box plots
+    # Structure: {generation: {'temperature': [values], 'oxygen': [values], 'oceans': [values]}}
+    generation_totals = defaultdict(lambda: {'temperature': [], 'oxygen': [], 'oceans': []})
+    
     # Path to parsed data directory
     parsed_data_dir = Path(config.PARSED_DATA_DIR)
     
@@ -90,6 +94,11 @@ def analyze_parameter_progression():
                     generation_progressions[generation]['temperature'].append(temp_delta)
                     generation_progressions[generation]['oxygen'].append(oxygen_delta)
                     generation_progressions[generation]['oceans'].append(oceans_delta)
+                    
+                    # Store the total parameter values at the end of this generation
+                    generation_totals[generation]['temperature'].append(last_entry.get('temperature', 0))
+                    generation_totals[generation]['oxygen'].append(last_entry.get('oxygen', 0))
+                    generation_totals[generation]['oceans'].append(last_entry.get('oceans', 0))
                 
                 processed_games += 1
                 
@@ -159,7 +168,93 @@ def analyze_parameter_progression():
     # Show the plot
     plt.show()
     
+    # Create combined box plots
+    create_combined_parameter_boxplots(generation_totals, processed_games)
+    
     return generation_progressions
+
+def create_combined_parameter_boxplots(generation_totals, processed_games):
+    """
+    Create combined box plots showing the distribution of parameter values for each generation.
+    Temperature on top, Oxygen and Oceans on bottom.
+    """
+    generations = sorted(generation_totals.keys())
+    
+    # Prepare data for box plots
+    temp_data = []
+    oxygen_data = []
+    oceans_data = []
+    
+    for gen in generations:
+        temp_data.append(generation_totals[gen]['temperature'])
+        oxygen_data.append(generation_totals[gen]['oxygen'])
+        oceans_data.append(generation_totals[gen]['oceans'])
+    
+    # Create the figure with two subplots stacked vertically
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12))
+    
+    # Top subplot: Temperature
+    bp_temp = ax1.boxplot(temp_data, positions=generations, widths=0.6, 
+                         patch_artist=True, labels=[f'G{g}' for g in generations])
+    
+    # Color the temperature box plots
+    for patch in bp_temp['boxes']:
+        patch.set_facecolor('red')
+        patch.set_alpha(0.7)
+    
+    # Customize the temperature plot
+    ax1.set_ylabel('Temperature (°C)', fontsize=12)
+    ax1.set_title(f'Terraforming Mars: Parameter distributions by generation (N={processed_games})', 
+                 fontsize=14, fontweight='bold')
+    ax1.set_xticks(generations)
+    ax1.set_xticklabels([f'Gen {g}' for g in generations])
+    ax1.grid(True, alpha=0.3)
+    
+    # Add legend for temperature
+    from matplotlib.patches import Patch
+    legend_temp = [Patch(facecolor='red', alpha=0.7, label='Temperature')]
+    ax1.legend(handles=legend_temp, fontsize=11)
+    
+    # Bottom subplot: Oxygen and Oceans
+    width = 0.35
+    positions_oxygen = [x - width/2 for x in generations]
+    positions_oceans = [x + width/2 for x in generations]
+    
+    bp_oxygen = ax2.boxplot(oxygen_data, positions=positions_oxygen, widths=width*0.8, 
+                           patch_artist=True, labels=[f'G{g}' for g in generations])
+    bp_oceans = ax2.boxplot(oceans_data, positions=positions_oceans, widths=width*0.8, 
+                           patch_artist=True, labels=[f'G{g}' for g in generations])
+    
+    # Color the oxygen and oceans box plots
+    for patch in bp_oxygen['boxes']:
+        patch.set_facecolor('green')
+        patch.set_alpha(0.7)
+    
+    for patch in bp_oceans['boxes']:
+        patch.set_facecolor('blue')
+        patch.set_alpha(0.7)
+    
+    # Customize the oxygen/oceans plot
+    ax2.set_xlabel('Generation', fontsize=12)
+    ax2.set_ylabel('Parameter values', fontsize=12)
+    ax2.set_xticks(generations)
+    ax2.set_xticklabels([f'Gen {g}' for g in generations])
+    ax2.grid(True, alpha=0.3)
+    
+    # Add legend for oxygen and oceans
+    legend_oxy_ocean = [Patch(facecolor='green', alpha=0.7, label='Oxygen'),
+                       Patch(facecolor='blue', alpha=0.7, label='Oceans')]
+    ax2.legend(handles=legend_oxy_ocean, fontsize=11)
+    
+    plt.tight_layout()
+    
+    # Save the combined box plot
+    output_file = 'parameter_distributions_boxplots.png'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"Combined parameter distributions saved as {output_file}")
+    
+    # Show the plot
+    plt.show()
 
 if __name__ == "__main__":
     analyze_parameter_progression()
