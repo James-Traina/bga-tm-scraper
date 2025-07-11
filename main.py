@@ -12,6 +12,8 @@ import time
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -472,6 +474,13 @@ def handle_scrape_replays(args) -> None:
     """Handle scrape-replays command"""
     logger.info("Starting replay scraping...")
     
+    # Initialize session tracking and email notifications
+    from bga_tm_scraper.session_tracker import start_new_session, end_current_session
+    from bga_tm_scraper.email_notifier import create_email_notifier_from_config
+    
+    session_tracker = start_new_session()
+    email_notifier = create_email_notifier_from_config()
+    
     games_registry = GamesRegistry()
     
     # Determine target games
@@ -541,18 +550,28 @@ def handle_scrape_replays(args) -> None:
                 
                 # Get version from registry first (optimization)
                 game_info = games_registry.get_game_info(table_id, player_perspective)
-                version = game_info.get('version') if game_info else None
                 
-                if version:
-                    logger.info(f"Using cached version from registry: {version}")
-                else:
-                    logger.info("Version not in registry, extracting from gamereview...")
-                    version = scraper.extract_version_from_gamereview(table_id)
-                    if version and game_info:
-                        # Update registry with the newly found version
-                        game_info['version'] = version
-                        games_registry.save_registry()
-                        logger.info(f"Cached version {version} to registry for future use")
+                # version = game_info.get('version') if game_info else None
+                
+                # if version:
+                #     logger.info(f"Using cached version from registry: {version}")
+                # else:
+                #     logger.info("Version not in registry, extracting from gamereview...")
+                #     version = scraper.extract_version_from_gamereview(table_id)
+                #     if version and game_info:
+                #         # Update registry with the newly found version
+                #         game_info['version'] = version
+                #         games_registry.save_registry()
+                #         logger.info(f"Cached version {version} to registry for future use")
+
+                # games.csv contains multiple incorrect version IDs. Uncomment this later when it has been stabilized
+
+                version = scraper.extract_version_from_gamereview(table_id)
+                if version and game_info:
+                    # Update registry with the newly found version
+                    game_info['version'] = version
+                    games_registry.save_registry()
+                    logger.info(f"Cached version {version} to registry for future use")
                 
                 if not version:
                     logger.warning(f"No version found for {table_id}")
@@ -571,6 +590,7 @@ def handle_scrape_replays(args) -> None:
                     if replay_result:
                         # Check if replay limit was reached
                         if replay_result.get('limit_reached'):
+                            session_tracker.set_termination_reason("Daily replay limit reached")
                             logger.warning("🚫 Daily replay limit reached - stopping scraping")
                             print("\n" + "="*60)
                             print("🚫 DAILY REPLAY LIMIT REACHED")
@@ -581,9 +601,12 @@ def handle_scrape_replays(args) -> None:
                             break  # Exit the game processing loop
                         
                         successful_scrapes += 1
+                        session_tracker.increment_successful_scrapes()
                         replay_exists = True
                         logger.info(f"✅ Successfully scraped replay for {table_id}")
                     else:
+                        session_tracker.increment_failed_operations()
+                        session_tracker.add_error(f"Failed to scrape replay for game {table_id}")
                         logger.warning(f"❌ Failed to scrape replay for {table_id}")
                         continue
                 
@@ -642,22 +665,77 @@ def handle_scrape_replays(args) -> None:
                         logger.error(f"Registry data keys: {list(games_registry.registry_data.keys())}")
                     
                     successful_parses += 1
+                    session_tracker.increment_successful_parses()
                     logger.info(f"✅ Successfully parsed game {table_id}")
             
             except Exception as e:
+                session_tracker.add_error(f"Error processing game {table_id}: {str(e)}", context=f"Game: {table_id}")
                 logger.error(f"Error processing game {table_id}: {e}")
             
             # Add delay between games
             time.sleep(getattr(config, 'REQUEST_DELAY', 1))
         
+        # Determine termination reason if not already set
+        if not session_tracker.termination_reason:
+            if successful_scrapes == 0 and successful_parses == 0:
+                session_tracker.set_termination_reason("No games processed - all games already completed or no games found")
+            else:
+                session_tracker.set_termination_reason("All available games processed successfully")
+        
         logger.info(f"Replay scraping complete: {successful_scrapes} scraped, {successful_parses} parsed")
         
     except Exception as e:
+        session_tracker.add_error(f"Critical error in replay scraping: {str(e)}")
+        session_tracker.set_termination_reason(f"Error encountered: {str(e)}")
         logger.error(f"Error in replay scraping: {e}")
     finally:
         scraper.close_browser()
         # Ensure registry is saved even if there were errors
         games_registry.save_registry()
+        
+        # End session and send email notification
+        session_tracker = end_current_session()
+        if session_tracker and email_notifier:
+            try:
+                # Get final statistics
+                session_stats = session_tracker.get_session_stats()
+                registry_stats = games_registry.get_stats()
+                
+                # Check config for email notification settings
+                should_send_email = False
+                termination_reason = session_stats.get('termination_reason', 'Unknown')
+                
+                if hasattr(config, 'EMAIL_ON_DAILY_LIMIT') and config.EMAIL_ON_DAILY_LIMIT:
+                    if 'limit reached' in termination_reason.lower():
+                        should_send_email = True
+                
+                if hasattr(config, 'EMAIL_ON_COMPLETION') and config.EMAIL_ON_COMPLETION:
+                    if 'successfully' in termination_reason.lower() or 'processed' in termination_reason.lower():
+                        should_send_email = True
+                
+                if hasattr(config, 'EMAIL_ON_ERROR') and config.EMAIL_ON_ERROR:
+                    if 'error' in termination_reason.lower():
+                        should_send_email = True
+                
+                if should_send_email:
+                    logger.info("Sending email notification...")
+                    success = email_notifier.send_scraping_completion_email(
+                        termination_reason=termination_reason,
+                        session_stats=session_stats,
+                        registry_stats=registry_stats,
+                        start_time=session_tracker.start_time,
+                        end_time=session_tracker.end_time
+                    )
+                    
+                    if success:
+                        logger.info("✅ Email notification sent successfully")
+                    else:
+                        logger.warning("⚠️ Failed to send email notification")
+                else:
+                    logger.info("Email notifications disabled or not configured for this termination reason")
+                    
+            except Exception as email_error:
+                logger.error(f"Error sending email notification: {email_error}")
 
 
 def handle_parse(args) -> None:
