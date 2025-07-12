@@ -13,8 +13,6 @@ Only bonuses gained by the player who owns each city are counted.
 """
 
 import json
-import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 import csv
