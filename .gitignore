@@ -35,6 +35,10 @@ venv.bak/
 *.swo
 *~
 
+# AI Assistant files
+CLAUDE.md
+.claude/
+
 # Logs
 *.log
 logs/
