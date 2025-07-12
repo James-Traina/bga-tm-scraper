@@ -1,0 +1,36 @@
+{
+  "table_id": "694146631",
+  "game_name": "Terraforming Mars",
+  "is_arena": false,
+  "players": [
+    {
+      "id": "player_0",
+      "name": "jat406"
+    },
+    {
+      "id": "player_1",
+      "name": "pauloeel"
+    },
+    {
+      "id": "player_2",
+      "name": "LordAizen55"
+    }
+  ],
+  "game_date": null,
+  "scrape_timestamp": "2025-07-12T14:11:29.499713",
+  "scraper_version": "simple_scraper_v1",
+  "final_scores": {
+    "jat406": {
+      "rank": 1,
+      "score": 80
+    },
+    "pauloeel": {
+      "rank": 2,
+      "score": 73
+    },
+    "LordAizen55": {
+      "rank": 3,
+      "score": 60
+    }
+  }
+}
