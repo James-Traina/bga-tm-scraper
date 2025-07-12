@@ -6,7 +6,7 @@ import re
 import json
 import os
 from typing import List, Dict, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from bs4 import BeautifulSoup, Tag
 import logging
