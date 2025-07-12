@@ -11,8 +11,6 @@ across all their games from their perspective.
 """
 
 import json
-import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 import csv
