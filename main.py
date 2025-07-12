@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
