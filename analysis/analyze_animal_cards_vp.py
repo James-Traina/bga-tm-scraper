@@ -11,8 +11,6 @@ Only includes cards that were actually played (exist in the cards dictionary).
 """
 
 import json
-import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 import csv
