@@ -11,8 +11,6 @@ ELO data comes from the elo_data.game_rank_change field for each player.
 """
 
 import json
-import os
-import sys
 from collections import defaultdict
 from pathlib import Path
 import csv
