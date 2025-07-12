@@ -9,13 +9,10 @@ from bs4 import BeautifulSoup
 import re
 import logging
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 logger = logging.getLogger(__name__)
 
